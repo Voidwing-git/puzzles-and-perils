@@ -53,6 +53,7 @@ test('adventure loop: private preparation, export, two discoveries, tray rollbac
   await page.locator('#draft-size').selectOption('4');
   await page.getByText('More options', {exact:true}).click();
   await page.locator('#draft-seed').fill('m3-ui-adventure');
+  await page.locator('#draft-free').uncheck();
   await page.locator('#generate-draft').click();
   await page.locator('#draft-recovery').selectOption('tray');
   await expect(page.locator('#board button')).toHaveCount(25);
@@ -124,11 +125,11 @@ test('all 18 configurations publish readable boards; socket recovery preserves e
   await page.locator('#free-play').check();
   const index = await page.locator('#board button.occupied:not(.source):not(.target)').first().getAttribute('data-index');
   const tile = page.locator(`#board [data-index="${index}"]`);
-  await tile.dblclick(); await expect(page.locator('#revision')).toHaveText('Revision 2');
+  await tile.dblclick(); await expect(page.locator('#revision')).toHaveText('Revision 1');
   // Recovery may legitimately change power markers; channel orientation must stay.
   const svg = await tile.locator('.rotating-piece').innerHTML();
   await page.locator('#piece-tray .unknown-piece').first().click({button:'right'}); await page.getByRole('menuitem',{name:'Restore piece',exact:true}).click();
-  await expect(page.locator('#revision')).toHaveText('Revision 3');
+  await expect(page.locator('#revision')).toHaveText('Revision 2');
   expect(await tile.locator('.rotating-piece').innerHTML()).toEqual(svg);
   await expect(page.locator('#piece-tray .unknown-piece')).toHaveCount(0);
 });

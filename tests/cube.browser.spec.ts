@@ -23,7 +23,7 @@ for(const free of [false,true])test(`cube inspection preserves artwork and enabl
     Object.defineProperty(HTMLImageElement.prototype,'src',{...descriptor,set(value:string){if(value.startsWith('data:image/svg+xml'))state.cubeImageLoads++;descriptor.set!.call(this,value);}});
   });
   await page.goto('/');await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('cube');
-  if(free)await page.locator('#draft-free').check();await page.locator('#publish-draft').click();
+  await page.locator('#draft-free').setChecked(free);await page.locator('#publish-draft').click();
   const indices=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state.tiles.flatMap((tile:{terminal?:string}|null,index:number)=>tile&&!tile.terminal?[index]:[]));
   await page.locator('#cube-square').selectOption(String(indices[0]));await expect(page.locator('#rotate')).toBeEnabled();
   const before=await page.evaluate(()=>{

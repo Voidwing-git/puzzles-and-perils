@@ -18,6 +18,7 @@ export class LocalAdapter {
   snapshot(): PublicPuzzle { return this.#controller.snapshot(); }
   get roomPlayers() { return [{id:'lyra',name:'Lyra'},{id:'orin',name:'Orin'}]; }
   get viewer() { return this.#viewer; }
+  get freePlayAllowed() {return this.roomPlayers.some(p=>p.id===this.#viewer);}
   get pending() { return this.#pending; }
   setViewer(id: string) { this.#viewer = id; }
   load(id: FixtureId) { const next=this.#controller.load(id);this.recoveryError='';return next; }
@@ -27,8 +28,9 @@ export class LocalAdapter {
   async request(command: Command, asHost = false) {
     if(this.recoveryError)throw new Error(this.recoveryError);
     if (this.#pending) throw new Error('A local action is already pending.');
+    if(!asHost&&!this.freePlayAllowed)return{accepted:false as const,reason:'unknown-player' as const,snapshot:this.snapshot()};
     this.#pending = true;
-    const actor = asHost ? { id: 'demo-host', role: 'GM' as const } : { id: this.#viewer, role: 'PLAYER' as const };
+    const actor = asHost ? { id: 'demo-host', role: 'GM' as const, name:'GM' } : { id: this.#viewer, role: 'PLAYER' as const, name:this.roomPlayers.find(p=>p.id===this.#viewer)?.name };
     try {
       // Preserve a visible request/acknowledgment boundary for later transports.
       await new Promise((resolve) => setTimeout(resolve, 90));

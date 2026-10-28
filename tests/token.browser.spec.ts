@@ -91,6 +91,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     const reconnect = button('Reconnect GM controller', () => {
       document.getElementById('gm-window')?.remove();
       document.getElementById('gm-background')?.remove();
+      for(const name of ['Make puzzle A','Make puzzle B','Open puzzle A','Open puzzle B','Double-click puzzle B with puzzle tool'])buttons.get(name)!.disabled=true;
       gm.connectionId = 'g-reconnected-'+(++reconnections);
       mount('gm-background', '/background.html', gm, true);
     }); reconnect.disabled = false;
@@ -163,6 +164,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(page.locator('#state')).toHaveCount(0);
   await page.locator('#gm-window').screenshot({path:'docs/evidence/m3-make-puzzle-settings.png'});
   await gm.locator('#setup-kind').selectOption('relay');
+  await gm.locator('#draft-free').uncheck();
   await gm.getByRole('button',{name:'Finalize puzzle',exact:true}).click();
   await expect(gm.locator('#active-player')).toHaveText('GM (solo GM seat)’s turn');
   await gm.locator('#viewer').selectOption('gm');
@@ -183,6 +185,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(page.locator('#gm-window')).toHaveAttribute('src',/token=token-b/);
   await expect(gm.getByRole('heading',{name:'Make a puzzle',exact:true})).toBeVisible();
   await gm.locator('#setup-kind').selectOption('dual-power');
+  await gm.locator('#draft-free').uncheck();
   await gm.getByRole('button',{name:'Finalize puzzle',exact:true}).click();
   await expect(gm.locator('#puzzle-title')).toHaveText('The twin currents');
   await hostAction('Open puzzle A');
@@ -203,7 +206,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(player.locator('#viewer')).toBeHidden();
   await expect(player.locator('.host-panel')).toBeHidden();
   await hostAction('Open puzzle A');
-  await gm.locator('#sync-players').click();
+  // The default roster now follows players joining the room automatically.
   await expect(player.locator('#active-player')).toHaveText('Player’s turn');
   await player.locator('[data-index="6"]').dblclick();
   await expect(gm.locator('#revision')).toHaveText('Revision 4');
@@ -341,8 +344,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(player.locator('#turn-order-panel #free-play')).toBeDisabled();
   await expect(player.locator('.order-actions')).toHaveCount(0);
   await hostAction('Join second test player');
-  await expect(gm.locator('#add-player option[value="second-player"]')).toHaveCount(1);
-  await gm.locator('#add-player').selectOption('second-player');await gm.locator('#add-player-button').click();
+  // Non-customized order includes the newly connected player without a GM click.
   await expect(player.locator('#turn-order-list li')).toHaveCount(2);
   await gm.getByRole('button',{name:'Move Second player up',exact:true}).click();
   await expect(player.locator('#turn-order-list li').first()).toContainText('Second player');

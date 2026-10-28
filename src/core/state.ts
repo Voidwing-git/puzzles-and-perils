@@ -30,7 +30,7 @@ export interface PuzzleState {
 }
 export interface PrivatePreparation {
   history?: string[];
-  actionHistory?: {revision:number;action:string;actor:string}[];
+  actionHistory?: {revision:number;action:string;actor:string;name?:string;at?:number;detail?:string}[];
   state: PuzzleState;
   seed: string;
   solution: (Tile | null)[];
@@ -53,7 +53,7 @@ export interface PublicPuzzle extends PuzzleState {
   poweredBy: Energy[][];
   mixed: number[];
 }
-export interface Actor { id: string; role: 'GM' | 'PLAYER' }
+export interface Actor { id: string; role: 'GM' | 'PLAYER'; name?:string }
 export type Command =
   | {type:'undo'|'pause-puzzle'|'resume-puzzle';puzzleId:string;expectedRevision:number}
   | { type: 'gm-rotate' | 'recall-piece'; tileIndex: number; puzzleId: string; expectedRevision: number }

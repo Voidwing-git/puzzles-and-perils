@@ -26,12 +26,14 @@ export class OwlbearAdapter {
   #rehearsal: PlayerRehearsal | null = null;
   #previewActor = '';
   #roomPlayers: {id:string;name:string}[]=[];
+  #syncingRoster=false;
   #refresh:(()=>Promise<void>)|undefined;
   get roomPlayers() {return structuredClone(this.#roomPlayers);}
   get preview() { return this.#rehearsal !== null; }
   get fixtureId(): FixtureId { return this.#shared?.fixture ?? 'relay'; }
   status = 'Connecting to Owlbear…';
   get viewer() { return this.#rehearsal ? this.#previewActor : this.#viewer; }
+  get freePlayAllowed(){return this.preview?this.snapshot().participants.some(p=>p.id===this.viewer):this.#ready&&!!this.#viewer;}
   get pending() { return this.#pending; }
   get gm() { return this.#gm; }
   get ready() { return this.#ready; }
@@ -124,6 +126,7 @@ export class OwlbearAdapter {
           this.#gm ? 'Previous controller disconnected. Explicitly Save changes to reconnect this puzzle.' :
           'PAUSED: waiting for the GM to reconnect and save this puzzle.';
       this.#notify();
+      await this.#syncDefaultRoster();
     };
     this.#refresh=refresh;
     if (this.#tokenId) {
@@ -138,6 +141,15 @@ export class OwlbearAdapter {
       if(event.key===privateStorageKey(this.privateScope))void refresh();
     });
     await refresh();
+  }
+  async #syncDefaultRoster(){
+    // Never overwrite a customized order or interrupt a turn preview. Retry
+    // after an in-flight GM action when a party change arrived during its ack.
+    if(this.#gm&&!this.preview&&this.#available&&!this.#pending&&!this.#syncingRoster&&this.#shared&&!this.#shared.puzzle.paused&&!this.#shared.puzzle.rosterCustomized&&!this.#shared.puzzle.turnEdit&&this.#roomPlayers.length&&JSON.stringify(this.#shared.puzzle.participants)!==JSON.stringify(this.#roomPlayers)){
+      this.#syncingRoster=true;
+      try{await this.request({type:'sync-players',puzzleId:this.#shared.puzzle.puzzleId,expectedRevision:this.#shared.puzzle.revision},true);}catch{/* request() exposes uncertain outcomes and keeps play paused. */}
+      finally{this.#syncingRoster=false;}
+    }
   }
   async start(fixture: FixtureId = 'relay') {
     if (!this.#gm || this.#shared) throw new Error('Only a GM can start an empty room.');
@@ -169,6 +181,7 @@ export class OwlbearAdapter {
     if (!this.#shared || (!this.#available && !gmSave))
       throw new Error('The original GM controller is disconnected. Open GM view and explicitly save the puzzle to reconnect. Your edits are kept privately.');
     this.#pending = true;
+    this.#notify();
     const request: Request = { id: crypto.randomUUID(), generation: this.#shared.generation, expiresAt: Date.now() + 6000, tokenId: this.#tokenId, command };
     try {
       // Retry the same ID, never a fresh rotation. Durable metadata is the ack.
@@ -192,6 +205,6 @@ export class OwlbearAdapter {
       this.#available = false;
       this.status = 'PAUSED: request outcome uncertain. Reopen the action window to reconcile.';
       throw error;
-    } finally { this.#pending = false; this.#notify(); }
+    } finally { this.#pending = false; this.#notify();void this.#syncDefaultRoster(); }
   }
 }

@@ -62,6 +62,8 @@ test('SDK iframe route shares a board, enforces turns and survives action-window
   await expect(a.locator('#play-screen')).toBeHidden();
   await expect(a.locator('#authoring')).toBeEmpty();
   await gm.locator('#setup-kind').selectOption('relay');
+  await expect(gm.locator('#draft-free')).toBeChecked();
+  await gm.locator('#draft-free').uncheck();
   await gm.getByRole('button', { name: 'Finalize puzzle',exact:true }).click();
   await expect(a.locator('.demo-banner')).toContainText('controller connected');
   await expect(a.locator('#active-player')).toHaveText('A’s turn');
@@ -76,9 +78,33 @@ test('SDK iframe route shares a board, enforces turns and survives action-window
   await expect(gm.locator('#next-turn')).toBeEnabled();
   await gm.locator('#next-turn').press('Enter');
   await expect(a.locator('#active-player')).toHaveText('B’s turn');
+  await gm.locator('#free-play').check();
+  await expect(b.locator('#active-player')).toHaveText('Free play');
+  await gm.getByRole('button',{name:'Remove B',exact:true}).click();
+  await expect(b.locator('#turn-order-list')).not.toContainText('B');
+  await b.locator('[data-index="7"]').dblclick();
+  await expect(a.locator('#revision')).toHaveText('Revision 5');
+  await expect(b.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  // A real room member omitted from the customized turn roster can also place
+  // and recall pieces in free play, not just rotate existing board pieces.
+  await gm.locator('[data-index="6"]').press('Enter');await gm.locator('#recall-piece').press('Enter');
+  await expect(b.locator('#inventory option')).toHaveCount(1);
+  await b.locator('[data-index="6"]').press('Enter');await expect(b.locator('#place-piece')).toBeEnabled();await b.locator('#place-piece').press('Enter');
+  await expect(a.locator('[data-index="6"]')).toHaveClass(/occupied/);
+  await expect(b.locator('.placed-piece')).toHaveAttribute('aria-disabled','false');
+  await b.locator('.placed-piece').press('Enter');await expect(a.locator('[data-index="6"]')).toHaveClass(/empty/);
+  await expect(gm.locator('#revision')).toHaveText('Revision 8');
+  await expect(b.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  await gm.locator('#event-history>summary').click();
+  await expect(gm.getByRole('dialog',{name:'GM event history'})).toBeVisible();
+  await expect(gm.locator('#action-history')).toContainText('B — Rotated');
+  await expect(gm.locator('#action-history')).toContainText('B — Placed');
+  await expect(gm.locator('#action-history')).toContainText('B — Returned');
+  await expect(b.locator('#event-history')).toBeHidden();await expect(b.locator('#action-history')).toBeEmpty();
+  await gm.locator('#event-history-panel').press('Escape');
   await page.locator('#gm').evaluate(frame => frame.remove());
   await b.locator('[data-index="7"]').dblclick();
-  await expect(a.locator('#revision')).toHaveText('Revision 3');
-  await expect(b.locator('#revision')).toHaveText('Revision 3');
+  await expect(a.locator('#revision')).toHaveText('Revision 9');
+  await expect(b.locator('#revision')).toHaveText('Revision 9');
   expect(errors).toEqual([]);
 });

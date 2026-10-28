@@ -3,6 +3,7 @@ import { applyCommand } from './commands.ts';
 import type { CommandResult } from './commands.ts';
 import type { Actor, Command, Direction, Participant, PrivatePreparation } from './state.ts';
 import type { FixtureId } from './fixtures.ts';
+import {puzzleEvent} from './event-history.ts';
 
 function transitionAdventure(preparation: PrivatePreparation, command: Command, actor: Actor, fixture: FixtureId = 'relay', roster?: Participant[]): { result: CommandResult; preparation: PrivatePreparation } {
   const state = preparation.state;
@@ -97,7 +98,7 @@ function transitionAdventure(preparation: PrivatePreparation, command: Command, 
     next.state.revision = state.revision + 1;
     return { result: { accepted: true, state: next.state }, preparation: next };
   }
-  const result = applyAdmin(state, command, actor, fixture, roster) ?? applyCommand(state, command, actor);
+  const result = applyAdmin(state, command, actor, fixture, roster) ?? applyCommand(state, command, actor, roster);
   return { result, preparation: result.accepted ? { ...preparation, state: result.state } : preparation };
 }
 
@@ -115,7 +116,7 @@ export function applyAdventure(preparation:PrivatePreparation,command:Command,ac
       next.state.puzzleId=state.puzzleId;next.state.revision=state.revision+1;
       if(next.startingState)next.startingState.puzzleId=state.puzzleId;
       next.history=preparation.history!.slice(0,-1);
-      next.actionHistory=[...(preparation.actionHistory??[]).slice(-31),{revision:next.state.revision,action:'undo',actor:actor.id}];
+      next.actionHistory=[...(preparation.actionHistory??[]).slice(-31),puzzleEvent(preparation,command,actor,next.state.revision)];
       return{result:{accepted:true,state:next.state},preparation:next};
     }
     const next=structuredClone(preparation);next.state.paused=command.type==='pause-puzzle';next.state.revision++;
@@ -128,7 +129,7 @@ export function applyAdventure(preparation:PrivatePreparation,command:Command,ac
     const checkpoint=structuredClone(preparation);delete checkpoint.history;delete checkpoint.actionHistory;
     result.preparation.history=[...(preparation.history??[]).slice(-11),JSON.stringify(checkpoint)];
     while(result.preparation.history.length&&new TextEncoder().encode(JSON.stringify(result.preparation.history)).length>512*1024)result.preparation.history.shift();
-    result.preparation.actionHistory=[...(preparation.actionHistory??[]).slice(-31),{revision:result.result.state.revision,action:command.type,actor:actor.id}];
+    result.preparation.actionHistory=[...(preparation.actionHistory??[]).slice(-31),puzzleEvent(preparation,command,actor,result.result.state.revision)];
   }
   return result;
 }

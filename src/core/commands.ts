@@ -1,13 +1,13 @@
 import { traceEnergy } from './connectivity.ts';
 import { applyAdmin } from './admin.ts';
-import type { Actor, Command, Direction, PuzzleState } from './state.ts';
+import type { Actor, Command, Direction, PuzzleState, Participant } from './state.ts';
 
 export type Rejection = 'wrong-puzzle' | 'stale-revision' | 'unknown-player' | 'wrong-turn' |
   'invalid-tile' | 'empty-socket' | 'fixed-terminal' | 'solved' | 'gm-only' | 'free-mode' | 'invalid-roster' | 'paused' | 'no-history';
 export type CommandResult = { accepted: true; state: PuzzleState } |
   { accepted: false; state: PuzzleState; reason: Rejection };
 
-export function applyCommand(state: PuzzleState, command: Command, actor: Actor): CommandResult {
+export function applyCommand(state: PuzzleState, command: Command, actor: Actor, roster?:Participant[]): CommandResult {
   const admin = applyAdmin(state, command, actor, 'relay');
   if (admin) return admin;
   const reject = (reason: Rejection): CommandResult => ({ accepted: false, state, reason });
@@ -17,7 +17,10 @@ export function applyCommand(state: PuzzleState, command: Command, actor: Actor)
   if (command.type === 'set-mode') {
     if (actor.role !== 'GM') return reject('gm-only');
     // Changing mode commits the current preview, preserving its orientation.
-    return { accepted: true, state: { ...state, mode: command.mode, turnEdit: null, revision: state.revision + 1 } };
+    const participants=command.mode==='turns'&&!state.rosterCustomized&&roster?.length?roster:state.participants;
+    const activeId=state.participants[state.activeIndex]?.id;
+    const retained=participants.findIndex(p=>p.id===activeId);
+    return { accepted: true, state: { ...state, participants, activeIndex:retained>=0?retained:0, mode: command.mode, turnEdit: null, revision: state.revision + 1 } };
   }
   if (command.type === 'advance-turn') {
     if (actor.role !== 'GM') {
@@ -31,7 +34,7 @@ export function applyCommand(state: PuzzleState, command: Command, actor: Actor)
   }
   if (command.type === 'return-piece') {
     if (actor.role !== 'GM') {
-      if (!state.participants.some(p=>p.id===actor.id)) return reject('unknown-player');
+      if (state.mode==='turns'&&!state.participants.some(p=>p.id===actor.id)) return reject('unknown-player');
       if (state.mode === 'turns' && state.participants[state.activeIndex].id !== actor.id) return reject('wrong-turn');
     }
     const restored = rollbackPreview(state);
@@ -47,7 +50,9 @@ export function applyCommand(state: PuzzleState, command: Command, actor: Actor)
       placements:restored.placements!.filter(p=>p.id!==command.pieceId),revision:state.revision+1}};
   }
   if (command.type !== 'rotate' && command.type !== 'select' && command.type !== 'place') return reject('gm-only');
-  if (!state.participants.some((player) => player.id === actor.id)) return reject('unknown-player');
+  // The shared controller authenticates current room membership. The saved
+  // turn roster restricts turn mode only, including for players who joined later.
+  if (state.mode==='turns'&&!state.participants.some((player) => player.id === actor.id)) return reject('unknown-player');
   if (state.mode === 'turns' && state.participants[state.activeIndex].id !== actor.id) return reject('wrong-turn');
   if (traceEnergy(state).solved && state.turnEdit === null) return reject('solved');
   if (!Number.isInteger(command.tileIndex) || command.tileIndex < 0 || command.tileIndex >= state.tiles.length) return reject('invalid-tile');

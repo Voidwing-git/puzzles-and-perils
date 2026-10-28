@@ -20,11 +20,13 @@ export function applyAdmin(state: PuzzleState, command: Command, actor: Actor, f
     return {accepted:true,state:{...rollbackPreview(state),participants,rosterCustomized:true,activeIndex:retained>=0?retained:Math.min(state.activeIndex,participants.length-1),turnEdit:null,revision:state.revision+1}};
   }
   const prepared = createFixture(fixture, state.puzzleId);
+  const activeId=state.participants[state.activeIndex]?.id;
+  const retained=roster?.findIndex(p=>p.id===activeId)??-1;
   return { accepted: true, state: { ...state,
     tiles: command.type === 'reset-puzzle' ? prepared.state.tiles : command.type === 'complete-puzzle' ? prepared.solution : state.tiles,
     ...(command.type==='sync-players'?{rosterCustomized:false}:{}),
     participants: command.type === 'sync-players' && roster?.length ? roster : state.participants,
-    activeIndex: command.type === 'complete-puzzle' ? state.activeIndex : 0,
+    activeIndex: command.type === 'complete-puzzle' ? state.activeIndex : command.type==='sync-players'&&retained>=0?retained:0,
     turnEdit: null, revision: state.revision + 1,
   } };
 }

@@ -259,8 +259,8 @@ function updateTabStops() {
 }
 
 function canRotate(): boolean {
-  return (!(adapter instanceof OwlbearAdapter) || adapter.available) && !snapshot.paused && !snapshot.solved && snapshot.participants.some((player) => player.id === adapter.viewer) &&
-    (snapshot.mode === 'free' || adapter.viewer === snapshot.participants[snapshot.activeIndex].id) && selected !== null &&
+  return (!(adapter instanceof OwlbearAdapter) || (adapter.available&&(!adapter.pending||queuedActions>0))) && !snapshot.paused && !snapshot.solved &&
+    (snapshot.mode==='free'?adapter.freePlayAllowed:snapshot.participants.some(player=>player.id===adapter.viewer)&&adapter.viewer===snapshot.participants[snapshot.activeIndex].id) && selected !== null &&
     snapshot.tiles[selected] !== null && !snapshot.tiles[selected]?.terminal;
 }
 
@@ -322,7 +322,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.8.2 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.8.3 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
@@ -347,17 +347,17 @@ function render() {
     document.querySelector('.local-pill')!.textContent = 'GM';
     element('shared-admin').hidden = snapshot.puzzleId === 'waiting';
     for (const id of ['reset-puzzle', 'complete-puzzle', 'sync-players'])
-      (element(id) as HTMLButtonElement).disabled = !!snapshot.paused || queuedActions > 0 || !adapter.available;
+      (element(id) as HTMLButtonElement).disabled = !!snapshot.paused || queuedActions > 0 || adapter.pending || !adapter.available;
     freePlay.closest('label')!.hidden = false;
   }
   rotate.disabled = queuedActions > 0 || !canRotate();
   const canEndTurn = !(adapter instanceof OwlbearAdapter) ||
     (adapter.gm && !adapter.preview) || adapter.viewer === current.id;
-  nextTurn.disabled = !!snapshot.paused || (adapter instanceof OwlbearAdapter && !adapter.available) || !canEndTurn || queuedActions > 0 || snapshot.solved || snapshot.mode === 'free';
+  nextTurn.disabled = !!snapshot.paused || (adapter instanceof OwlbearAdapter && !adapter.available) || !canEndTurn || queuedActions > 0 || adapter.pending || snapshot.solved || snapshot.mode === 'free';
   viewer.disabled = queuedActions > 0;
   fixture.disabled = queuedActions > 0;
   loadBoard.disabled = queuedActions > 0;
-  freePlay.disabled = !!snapshot.paused || (adapter instanceof OwlbearAdapter && (!adapter.available || !adapter.gm || adapter.preview)) || queuedActions > 0;
+  freePlay.disabled = !!snapshot.paused || (adapter instanceof OwlbearAdapter && (!adapter.available || !adapter.gm || adapter.preview)) || queuedActions > 0 || adapter.pending;
   if (queuedActions === 0) freePlay.checked = snapshot.mode === 'free';
   rotate.setAttribute('aria-busy', String(queuedActions > 0));
   fitPuzzle();
@@ -498,7 +498,7 @@ let disposeAuthoring:(()=>void)|undefined;
 let editingCurrent = false;
 function beginPieceDrag(event: PointerEvent, pieceId: string, card: HTMLButtonElement) {
   if (snapshot.paused || event.button !== 0 || queuedActions || publishing) return;
-  const player = snapshot.participants.some(p => p.id === adapter.viewer);
+  const player = snapshot.mode==='free'?adapter.freePlayAllowed:snapshot.participants.some(p => p.id === adapter.viewer);
   if (!player || snapshot.solved || (snapshot.mode === 'turns' && snapshot.participants[snapshot.activeIndex].id !== adapter.viewer) ||
     (adapter instanceof OwlbearAdapter && !adapter.available)) return;
   event.preventDefault();
@@ -569,7 +569,7 @@ function beginPieceDrag(event: PointerEvent, pieceId: string, card: HTMLButtonEl
 }
 function setOrder(ids:string[]) {enqueue('set-roster',undefined,undefined,undefined,undefined,ids);}
 function renderTurnOrder(isGM:boolean) {
-  const busy=!!snapshot.paused || queuedActions>0 || (adapter instanceof OwlbearAdapter && !adapter.available);
+  const busy=!!snapshot.paused || queuedActions>0 || adapter.pending || (adapter instanceof OwlbearAdapter && !adapter.available);
   const list=element('turn-order-list');
   list.replaceChildren(...snapshot.participants.map((player,index)=>{
     const row=document.createElement('li');row.dataset.playerId=player.id;
@@ -598,11 +598,11 @@ function renderTurnOrder(isGM:boolean) {
 function canRecallPiece() {
   if(snapshot.paused || queuedActions || publishing || (adapter instanceof OwlbearAdapter && !adapter.available))return false;
   if(adapter instanceof OwlbearAdapter && adapter.gm&&!adapter.preview)return true;
-  return snapshot.participants.some(p=>p.id===adapter.viewer) && (snapshot.mode==='free'||snapshot.participants[snapshot.activeIndex].id===adapter.viewer);
+  return snapshot.mode==='free'?adapter.freePlayAllowed:snapshot.participants.some(p=>p.id===adapter.viewer)&&snapshot.participants[snapshot.activeIndex].id===adapter.viewer;
 }
 function renderAdventure() {
   const isGM = !(adapter instanceof OwlbearAdapter) || (adapter.gm && !adapter.preview);
-  recovery.update(isGM,queuedActions>0||publishing,adapter instanceof OwlbearAdapter?adapter.available:!adapter.recoveryError);
+  recovery.update(isGM,queuedActions>0||adapter.pending||publishing,adapter instanceof OwlbearAdapter?adapter.available:!adapter.recoveryError);
   updatePieceMenu(!!snapshot.paused || queuedActions > 0 || (adapter instanceof OwlbearAdapter && !adapter.available), !!snapshot.turnEdit);
   const finalized = !(adapter instanceof OwlbearAdapter) || adapter.finalized;
   const ready = !(adapter instanceof OwlbearAdapter) || adapter.ready;
@@ -612,10 +612,10 @@ function renderAdventure() {
   element('view-label').textContent = showSetup ? 'Puzzle setup · GM only' : 'GM view';
   element('open-setup').hidden = showSetup;
   element('edit-puzzle').hidden = showSetup || !finalized;
-  element<HTMLButtonElement>('edit-puzzle').disabled = queuedActions > 0 || !!snapshot.turnEdit;
+  element<HTMLButtonElement>('edit-puzzle').disabled = queuedActions > 0 || adapter.pending || !!snapshot.turnEdit;
   element('return-gm').hidden = !showSetup || !finalized;
   element<HTMLButtonElement>('return-gm').disabled = publishing;
-  element<HTMLButtonElement>('open-setup').disabled = queuedActions > 0;
+  element<HTMLButtonElement>('open-setup').disabled = queuedActions > 0 || adapter.pending;
   element('play-screen').hidden = !ready || !finalized || showSetup;
   element('waiting-screen').hidden = ready && (showSetup || finalized);
   element('waiting-message').textContent = adapter instanceof OwlbearAdapter ? adapter.status : '';
@@ -728,14 +728,14 @@ function renderAdventure() {
     tray.append(ghost);
   }
   renderTurnOrder(isGM);
-  const participant = snapshot.participants.some(p => p.id === adapter.viewer);
+  const participant = snapshot.mode==='free'?adapter.freePlayAllowed:snapshot.participants.some(p => p.id === adapter.viewer);
   element<HTMLButtonElement>('place-piece').disabled = !!snapshot.paused || queuedActions > 0 || !inventory.value || selected === null || !!snapshot.tiles[selected] ||
     snapshot.solved || !participant || (snapshot.mode === 'turns' && snapshot.participants[snapshot.activeIndex].id !== adapter.viewer) ||
     (adapter instanceof OwlbearAdapter && !adapter.available);
 }
 for (const type of ['gm-rotate', 'recall-piece'] as const) element(type).onclick = () => { if (selected !== null) enqueue(type, selected); };
 element('open-setup').onclick = () => {
-  if (editingCurrent) authoringMounted = false;
+  authoringMounted = false;
   editingCurrent = false; settingUp = true; render();
 };
 element('edit-puzzle').onclick = () => {

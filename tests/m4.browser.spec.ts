@@ -8,7 +8,8 @@ test('M4 undo, pause, backup review, reload and restore through real local contr
   await expect(page.locator('[data-index="6"]')).toHaveAttribute('aria-label',/west and north/);
   await page.locator('#pause-puzzle').click();await expect(page.locator('#active-player')).toHaveText('Paused');await expect(page.locator('#rotate')).toBeDisabled();
   await page.locator('#save-recovery>summary').click();
-  expect(await page.locator('#backup-private').evaluate(button=>{const r=button.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return button===hit||button.contains(hit);})).toBe(true);
+  await expect(page.locator('#backup-private')).toBeVisible();
+  await expect.poll(()=>page.locator('#backup-private').evaluate(button=>{const r=button.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return button===hit||button.contains(hit);})).toBe(true);
   const saving=page.waitForEvent('download');await page.locator('#backup-private').click();const save=await readFile((await(await saving).path())!,'utf8');
   expect(JSON.parse(save).version).toBe(1);expect(JSON.parse(save).preparation.state.paused).toBe(true);
   await page.reload();await expect(page.locator('#active-player')).toHaveText('Paused');await expect(page.locator('#revision')).toHaveText('Revision 3');

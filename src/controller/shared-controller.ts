@@ -5,6 +5,7 @@ import type { Shared } from '../transport/protocol.ts';
 import { readPrivate, savePrivate,discardPrivate } from '../core/private-store.ts';
 import { applyAdventure } from '../core/adventure.ts';
 import {validatePreparation} from '../core/save-format.ts';
+import {puzzleEvent} from '../core/event-history.ts';
 
 
 export interface Peer { id: string; connectionId: string; role: 'GM' | 'PLAYER'; name: string }
@@ -72,7 +73,8 @@ export class SharedController {
         draft.state.activeIndex=restoring?Math.max(0,draft.state.participants.findIndex(p=>p.id===activePlayer)):Math.min(draft.state.activeIndex,draft.state.participants.length-1);
         draft.state.puzzleId = request.command.draftId;
         if(restoring){draft.startingState??=structuredClone(draft.state);draft.startingState.puzzleId=draft.state.puzzleId;draft.startingWithheld??=structuredClone(draft.withheld);}
-        else {draft.startingState = structuredClone(draft.state);draft.startingWithheld = structuredClone(draft.withheld);draft.history=[];draft.actionHistory=[];}
+        else {draft.startingState = structuredClone(draft.state);draft.startingWithheld = structuredClone(draft.withheld);draft.history=[];}
+        draft.actionHistory=[...(draft.actionHistory??[]).slice(-31),puzzleEvent(draft,request.command,actor,draft.state.revision,restoring?'Restored a private backup':shared?'Updated the puzzle':'Created the puzzle')];
         pendingPrivate = draft;
         shared = { version: 1, owner: this.connection, generation: crypto.randomUUID(), puzzle: projectPublic(draft),
           receipts: [{ id: request.id, connection: sender, revision: draft.state.revision, accepted: true }],
@@ -87,7 +89,7 @@ export class SharedController {
       } else {
         if (shared.version !== 1 || shared.owner !== this.connection || request.generation !== shared.generation) return;
         if (shared.receipts.some(r => r.id === request.id && r.connection === sender)) return;
-        const identity = { id: actor.id, role: actor.role };
+        const identity = { id: actor.id, role: actor.role, name:actor.name };
         const rawSaved = typeof localStorage === 'undefined' ? null : readPrivate(privateKey);
         const saved=rawSaved?validatePreparation(rawSaved):null;
         if (saved && (saved.state.puzzleId !== shared.puzzle.puzzleId||saved.state.revision!==shared.puzzle.revision)) throw new Error('Private/public puzzle mismatch. Controller paused. Import a private backup to recover.');

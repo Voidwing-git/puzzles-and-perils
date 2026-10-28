@@ -4,9 +4,15 @@ A shared pipe puzzle for Owlbear Rodeo. Supports flat boards, connected cube
 faces, a 4 x 4 x 1 dais, GM authoring, missing pieces, turns/free play, private
 backups, undo and pause/resume. Local demonstration names are fictional.
 
+New puzzles default to free play: any connected room member can rotate, place
+and recall pieces without being in the turn order. The default roster follows
+players joining while the GM view is open; a customized order is preserved.
+Switching to turns loads current room players when the order is not customized.
+The GM's **Event history** shows recent actions and is included in private backups.
+
 ## Release status
 
-Version 0.8.2 is a hosted-testing candidate. Live multi-device/table
+Version 0.8.3 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

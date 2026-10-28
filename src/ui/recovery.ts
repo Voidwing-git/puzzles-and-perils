@@ -1,10 +1,12 @@
 import {decodePrivateSave,encodePrivateSave,MAX_SAVE_BYTES} from '../core/save-format.ts';
 import type {PrivatePreparation,PublicPuzzle} from '../core/state.ts';
+import {mountEventHistory} from './event-history.ts';
 
 export function mountRecovery(host:HTMLElement,options:{snapshot:()=>PublicPuzzle;preparation:()=>PrivatePreparation|null;restore:(p:PrivatePreparation)=>Promise<void>;command:(type:'undo'|'pause-puzzle'|'resume-puzzle')=>void;report:(message:string)=>void}){
   const root=document.createElement('div');root.className='recovery-controls';
-  root.innerHTML='<button type="button" id="undo-puzzle" class="secondary-button">Undo</button><button type="button" id="pause-puzzle" class="secondary-button">Pause</button><details id="save-recovery"><summary>Save / recovery</summary><div class="recovery-popover"><button type="button" id="backup-private" class="secondary-button">Download private backup</button><button type="button" id="backup-public" class="secondary-button">Export public board</button><label>Import private backup<input id="import-private" type="file" accept=".json,application/json"/></label><div id="restore-review" hidden><p id="restore-description"></p><button type="button" id="restore-save" class="primary-button">Replace current puzzle with this save</button><button type="button" id="cancel-restore" class="text-button">Cancel</button></div><p class="quiet">Private backups include the solution, hidden pieces and undo history. Keep them with the GM.</p><details><summary>Recent actions</summary><ol id="action-history"></ol></details></div></details>';
+  root.innerHTML='<button type="button" id="undo-puzzle" class="secondary-button">Undo</button><button type="button" id="pause-puzzle" class="secondary-button">Pause</button><details id="save-recovery"><summary>Save / recovery</summary><div class="recovery-popover"><button type="button" id="backup-private" class="secondary-button">Download private backup</button><button type="button" id="backup-public" class="secondary-button">Export public board</button><label>Import private backup<input id="import-private" type="file" accept=".json,application/json"/></label><div id="restore-review" hidden><p id="restore-description"></p><button type="button" id="restore-save" class="primary-button">Replace current puzzle with this save</button><button type="button" id="cancel-restore" class="text-button">Cancel</button></div><p class="quiet">Private backups include the solution, hidden pieces and undo history. Keep them with the GM.</p></div></details>';
   host.append(root);
+  const eventHistory=mountEventHistory(root);
   // The toolbar scrolls horizontally; its overflow clips nested dropdowns.
   // Keep the recovery panel in a viewport portal, with controls still in the bar.
   const panel=root.querySelector<HTMLElement>('.recovery-popover')!;panel.hidden=true;panel.id='recovery-panel';panel.setAttribute('role','dialog');panel.setAttribute('aria-label','Save and recovery');panel.tabIndex=-1;document.body.append(panel);
@@ -36,7 +38,7 @@ export function mountRecovery(host:HTMLElement,options:{snapshot:()=>PublicPuzzl
     finally{busy=false;el<HTMLButtonElement>('restore-save').disabled=false;}
   };
   return {update(isGM:boolean,blocked:boolean,available:boolean){
-    root.hidden=!isGM;panel.hidden=!isGM||!details.open;if(!isGM)return;position();
+    root.hidden=!isGM;panel.hidden=!isGM||!details.open;if(!isGM){eventHistory.update(false,null);return;}position();
     let p:PrivatePreparation|null=null;try{p=options.preparation();}catch{/* Recovery import remains available. */}
     el<HTMLButtonElement>('undo-puzzle').disabled=blocked||!available||!p?.history?.length;
     el<HTMLButtonElement>('pause-puzzle').disabled=blocked||!available;
@@ -45,6 +47,6 @@ export function mountRecovery(host:HTMLElement,options:{snapshot:()=>PublicPuzzl
     el<HTMLButtonElement>('backup-public').disabled=blocked;
     el<HTMLInputElement>('import-private').disabled=blocked;
     el<HTMLButtonElement>('restore-save').disabled=blocked||busy;
-    el('action-history').replaceChildren(...(p?.actionHistory??[]).slice().reverse().map(action=>{const row=document.createElement('li');row.textContent=`${action.revision}: ${action.action} (${action.actor})`;return row;}));
+    eventHistory.update(true,p);
   }};
 }

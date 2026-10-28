@@ -241,7 +241,7 @@ test('connected preview stays adjustable until committed; selection can undo a p
   rejectUnchanged(state, rotate(state, 6), { id: 'orin', role: 'PLAYER' }, 'solved');
 });
 
-test('free play keeps all rotations, admits both participants, but excludes spectators', () => {
+test('free play keeps all rotations and admits authenticated actors outside the turn roster', () => {
   let state = createFixture('relay').state;
   const mode: Command = { type: 'set-mode', mode: 'free', puzzleId: state.puzzleId, expectedRevision: state.revision };
   rejectUnchanged(state, mode, lyra, 'gm-only');
@@ -251,7 +251,7 @@ test('free play keeps all rotations, admits both participants, but excludes spec
   assert.equal(state.tiles[6]!.rotation, 0);
   assert.equal(state.tiles[12]!.rotation, 2);
   assert.equal(state.turnEdit, null);
-  rejectUnchanged(state, rotate(state, 6), { id: 'spectator', role: 'PLAYER' }, 'unknown-player');
+  assert.equal(applyCommand(state, rotate(state, 6), { id: 'late-room-player', role: 'PLAYER' }).accepted,true);
   rejectUnchanged(state, advance(state), gm, 'free-mode');
 });
 

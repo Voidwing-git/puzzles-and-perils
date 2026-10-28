@@ -25,7 +25,7 @@ export function mountAuthoring(root: HTMLElement, finalize: (puzzle: PrivatePrep
         <button id="generate-draft" class="secondary-button">Randomize</button>
         <p class="quiet">Try another layout with these settings. Randomizing replaces removed-piece choices in this preview.</p></div>
       <label>Missing-piece recovery<select id="draft-recovery"><option value="socket">Restore original sockets</option><option value="tray">Players place recovered pieces</option></select></label>
-      <label class="mode-toggle"><input id="draft-free" type="checkbox"/> Free play (turns off)</label>
+      <label class="mode-toggle"><input id="draft-free" type="checkbox" checked/> Free play (turns off)</label>
 
       <p class="quiet">Click an ordinary piece to move it to the creator tray. Select it there to add its name and GM notes.</p>
       <button id="publish-draft" class="primary-button">Finalize puzzle</button>
@@ -174,10 +174,10 @@ export function mountAuthoring(root: HTMLElement, finalize: (puzzle: PrivatePrep
     puzzle!.state.tiles[piece.index]={...piece.tile};puzzle!.withheld=puzzle!.withheld.filter(p=>p.index!==piece.index);
     selectedRemoved=null;persist();render();
   };
-  new ResizeObserver(()=>{
+  const trayObserver=new ResizeObserver(()=>{
     const size=el('draft-board').firstElementChild?.getBoundingClientRect().width;
     if(size)el('draft-tray').style.setProperty('--tray-piece-size',size+'px');
-  }).observe(el('draft-board'));
+  });trayObserver.observe(el('draft-board'));
   el('generate-draft').onclick = () => rebuild(true);
   el('draft-camera').onclick=()=>cubeView?.resetCamera();
   el('cube-face-settings').onchange=()=>rebuild();
@@ -208,6 +208,7 @@ export function mountAuthoring(root: HTMLElement, finalize: (puzzle: PrivatePrep
   };
   try {
     puzzle = initial ? structuredClone(initial) : readPrivate(`${scope}:working-draft`);
+    if(puzzle&&!editing)puzzle.state.mode='free';
     if (puzzle) {
       if(puzzle.state.cubeFaces){el<HTMLSelectElement>('setup-kind').value=puzzle.state.cubeDimensions?'dais':'cube';previousKind=el<HTMLSelectElement>('setup-kind').value;el<HTMLSelectElement>('draft-size').closest('label')!.hidden=!!puzzle.state.cubeDimensions;el('cube-face-settings').hidden=false;el<HTMLSelectElement>('draft-size').prepend(new Option('3','3'));for(const input of root.querySelectorAll<HTMLInputElement>('#cube-face-settings input'))input.checked=puzzle.state.cubeFaces.includes(input.value as CubeFace);}
       el<HTMLSelectElement>('draft-size').value = String(puzzle.state.width);
@@ -222,5 +223,5 @@ export function mountAuthoring(root: HTMLElement, finalize: (puzzle: PrivatePrep
       el('generator-settings').hidden = !!fixture; render();
     } else rebuild();
   } catch (error) { rebuild(); report(error); }
-  return ()=>{cubeView?.dispose();cubeView=null;};
+  return ()=>{trayObserver.disconnect();cubeView?.dispose();cubeView=null;};
 }

@@ -5,6 +5,7 @@ import type { Actor, Command, PublicPuzzle } from '../core/state.ts';
 import type { PrivatePreparation } from '../core/state.ts';
 import { applyAdventure } from '../core/adventure.ts';
 import {validatePreparation,rekeyPreparation} from '../core/save-format.ts';
+import {puzzleEvent} from '../core/event-history.ts';
 
 // M1 authority: the view receives detached public snapshots, never preparation.
 export class LocalController {
@@ -25,7 +26,8 @@ export class LocalController {
     const next = structuredClone(preparation);
     next.startingState = structuredClone(preparation.state);
     next.startingWithheld = structuredClone(preparation.withheld);
-    next.history=[];next.actionHistory=[];
+    next.history=[];
+    next.actionHistory=[...(next.actionHistory??[]).slice(-31),puzzleEvent(next,{type:'publish-draft',draftId:next.state.puzzleId,puzzleId:next.state.puzzleId,expectedRevision:next.state.revision},{id:'demo-host',role:'GM',name:'GM'},next.state.revision)];
     this.persist(next);
     this.#preparation = next;
     return this.snapshot();
@@ -33,6 +35,7 @@ export class LocalController {
 
   restore(preparation:PrivatePreparation){
     const next=rekeyPreparation(validatePreparation(preparation),crypto.randomUUID());
+    next.actionHistory=[...(next.actionHistory??[]).slice(-31),puzzleEvent(next,{type:'restore-draft',draftId:next.state.puzzleId,puzzleId:next.state.puzzleId,expectedRevision:next.state.revision},{id:'demo-host',role:'GM',name:'GM'},next.state.revision)];
     this.persist(next);this.#preparation=next;return this.snapshot();
   }
 
