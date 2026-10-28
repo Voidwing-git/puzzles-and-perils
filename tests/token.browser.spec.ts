@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import type { PrivatePreparation } from '../src/core/state.ts';
+import type { PrivatePreparation,PublicPuzzle } from '../src/core/state.ts';
 
 // Local SDK host double. Public UI routes are real compiled code; Owlbear's
 // networking/identity/storage guarantees still require the real-room gate.
@@ -275,15 +275,24 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     await gm.locator('#piece-tray .unknown-piece').first().click({button:'right'}); await gm.getByRole('menuitem',{name:'Give piece to players',exact:true}).click();
     await expect(player.locator('#inventory option')).toHaveCount(i+1);
   }
+  const publicPuzzle=async()=>JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'].puzzle as PublicPuzzle;
+  const selectPlayerTile=async(index:number)=>{
+    await expect(player.locator('#rotate')).toHaveAttribute('aria-busy','false');
+    const tile=player.locator('[data-index="'+index+'"]');
+    await tile.press('Enter');await expect(tile).toHaveAttribute('aria-pressed','true');
+    await expect(player.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  };
+  const placeSelected=async()=>{await expect(player.locator('#place-piece')).toBeEnabled();await player.locator('#place-piece').press('Enter');};
+  await expect(player.locator('#free-play')).toBeChecked();
   for (const piece of preparation.withheld) {
-    await player.locator('[data-index="'+piece.index+'"]').click();
-    await player.locator('#place-piece').click();
+    await selectPlayerTile(piece.index);
+    await placeSelected();
     await expect(player.locator('[data-index="'+piece.index+'"]').first()).toHaveClass(/occupied/);
     if(piece.index===preparation.withheld[0].index){
       await expect(player.locator('.placed-piece').first()).toHaveAttribute('aria-disabled','false');
-      await player.locator('.placed-piece').first().click();
+      await player.locator('.placed-piece').first().press('Enter');
       await expect(player.locator('[data-index="'+piece.index+'"]')).toHaveClass(/empty/);
-      await player.locator('[data-index="'+piece.index+'"]',).click();await player.locator('#place-piece').click();
+      await selectPlayerTile(piece.index);await placeSelected();
       await expect(player.locator('[data-index="'+piece.index+'"]')).toHaveClass(/occupied/);
     }
 
@@ -291,13 +300,15 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   for (let index=0;index<preparation.solution.length;index++) {
     const tile=preparation.solution[index]; if (!tile || tile.terminal) continue;
     if (await player.locator('#success[data-solved="true"]').isVisible()) break;
-    const start=preparation.withheld.some(p=>p.index===index)?0:preparation.state.tiles[index]!.rotation;
+    const start=(await publicPuzzle()).tiles[index]!.rotation;
     const turns=(tile.rotation-start+4)%4;
     if (!turns) continue;
-    await player.locator('[data-index="'+index+'"]').click();
+    await selectPlayerTile(index);
     for (let n=0;n<turns;n++) {
       if (await player.locator('#success[data-solved="true"]').isVisible()) break;
-      await player.locator('#rotate').click();
+      await expect(player.locator('#rotate')).toBeEnabled();
+      await player.locator('#rotate').press('Enter');
+      await expect.poll(async()=>(await publicPuzzle()).tiles[index]!.rotation).toBe((start+n+1)%4);
       await expect(player.locator('#rotate')).toHaveAttribute('aria-busy','false');
     }
   }

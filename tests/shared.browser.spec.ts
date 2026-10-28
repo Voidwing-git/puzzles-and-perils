@@ -3,6 +3,9 @@ import { test, expect } from '@playwright/test';
 // Local SDK host double: exercises the compiled SDK/background/action boundary.
 // Does not emulate Owlbear service ordering, identity guarantees or persistence.
 test('SDK iframe route shares a board, enforces turns and survives action-window closure', async ({ page }) => {
+  // Keep all simulated clients visible; offscreen cross-origin frames may
+  // throttle the polling/animation work that a real separate client performs.
+  await page.setViewportSize({width:1600,height:4200});
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/m2-harness', route => route.fulfill({ contentType: 'text/html', body: '<html><body>Local SDK host double</body></html>' }));
@@ -44,6 +47,7 @@ test('SDK iframe route shares a board, enforces turns and survives action-window
     ] as const) {
       const frame = document.createElement('iframe');
       frame.id = name;
+      frame.hidden=name==='background';
       frame.width = '1200'; frame.height = '1000';
       frame.src = `${extensionOrigin}/${path}?obrref=${encodeURIComponent(btoa(location.origin + ' test-room'))}`;
       frame.onload = () => emit(frame, 'OBR_READY', { ref: name, userId: peer.id });
@@ -67,7 +71,10 @@ test('SDK iframe route shares a board, enforces turns and survives action-window
   await expect(b.locator('#revision')).toHaveText('Revision 1');
   await b.locator('[data-index="7"]').click();
   await expect(b.locator('#rotate')).toBeDisabled();
-  await gm.locator('#next-turn').click();
+  await expect(gm.locator('#revision')).toHaveText('Revision 1');
+  await expect(a.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  await expect(gm.locator('#next-turn')).toBeEnabled();
+  await gm.locator('#next-turn').press('Enter');
   await expect(a.locator('#active-player')).toHaveText('B’s turn');
   await page.locator('#gm').evaluate(frame => frame.remove());
   await b.locator('[data-index="7"]').dblclick();
