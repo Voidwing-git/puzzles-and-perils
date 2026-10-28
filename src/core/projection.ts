@@ -1,0 +1,34 @@
+import { traceEnergy } from './connectivity.ts';
+import { cloneTile } from './state.ts';
+import type { PrivatePreparation, PublicPuzzle } from './state.ts';
+
+// An allowlist, never a spread or serialized copy of private preparation.
+export function projectPublic(preparation: PrivatePreparation): PublicPuzzle {
+  const state = preparation.state;
+  const energy = traceEnergy(state);
+  return {
+    schemaVersion: 2,
+    ...(state.paused?{paused:true}:{}),
+    ...(state.cubeFaces?{cubeFaces:[...state.cubeFaces]}:{}),
+    ...(state.cubeDimensions?{cubeDimensions:{width:state.cubeDimensions.width,depth:state.cubeDimensions.depth,height:state.cubeDimensions.height}}:{}),
+    missingCount: preparation.withheld.length + (preparation.hiddenInventory?.length ?? 0),
+    missingSockets:[...new Set([...(preparation.startingWithheld ?? preparation.withheld).map(p=>p.index),...(preparation.hiddenInventory??[]).flatMap(p=>p.origin?[p.origin.index]:[])])].filter(index=>!state.tiles[index]),
+    ...(state.placements ? {placements:state.placements.map(p=>({id:p.id,tileIndex:p.tileIndex}))} : {}),
+    puzzleId: state.puzzleId,
+    title: state.title,
+    width: state.width,
+    height: state.height,
+    tiles: state.tiles.map(cloneTile),
+    participants: state.participants.map(({ id, name }) => ({ id, name })),
+    ...(state.rosterCustomized ? {rosterCustomized:true} : {}),
+    activeIndex: state.activeIndex,
+    mode: state.mode,
+    turnEdit: state.turnEdit ? { tileIndex: state.turnEdit.tileIndex, originalRotation: state.turnEdit.originalRotation,
+      ...(state.turnEdit.placedPiece ? { placedPiece: state.turnEdit.placedPiece } : {}) } : null,
+    ...(state.inventory ? { inventory: state.inventory.map(p => ({ id: p.id, tile: cloneTile(p.tile)! })) } : {}),
+    revision: state.revision,
+    ...energy,
+    connected: energy.solved,
+    solved: energy.solved && state.turnEdit === null,
+  };
+}

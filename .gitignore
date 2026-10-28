@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.npm-cache/
+test-results/
+playwright-report/
+.env*
+*.private.json
+.browser-mcp/
+.security-tools/
+.release/
+.publish/
+artifacts/
+docs/evidence/
+*.private-backup.json
+arcane-pipes-private-*.json

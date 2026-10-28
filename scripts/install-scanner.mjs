@@ -1,0 +1,20 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+
+const version='8.30.1';
+const platform=process.platform==='win32'?'windows':process.platform==='linux'?'linux':null;
+if(!platform||process.arch!=='x64')throw Error('Use a reviewed Gitleaks binary for this platform.');
+const archive=platform==='windows'?`gitleaks_${version}_windows_x64.zip`:`gitleaks_${version}_linux_x64.tar.gz`;
+const expected=platform==='windows'?'d29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e':'551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb';
+const root=path.resolve('.security-tools','gitleaks-'+version),bin=path.join(root,'bin');
+fs.mkdirSync(bin,{recursive:true});
+const response=await fetch(`https://github.com/gitleaks/gitleaks/releases/download/v${version}/${archive}`);
+if(!response.ok)throw Error('Security scanner download failed.');
+const bytes=Buffer.from(await response.arrayBuffer());if(createHash('sha256').update(bytes).digest('hex')!==expected)throw Error('Security scanner checksum mismatch.');
+const target=path.join(root,archive);fs.writeFileSync(target,bytes);
+const result=platform==='windows'?spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-Command','Expand-Archive -LiteralPath $env:SCANNER_ARCHIVE -DestinationPath $env:SCANNER_BIN -Force'],{env:{...process.env,SCANNER_ARCHIVE:target,SCANNER_BIN:bin},encoding:'utf8'}):spawnSync('tar',['-xzf',target,'-C',bin],{encoding:'utf8'});
+if(result.status!==0)throw Error('Scanner extraction failed.');
+fs.writeFileSync(path.join(root,'checksum-verification.json'),JSON.stringify({tool:'gitleaks',version,sha256:expected,verified:true},null,2));
+console.log('Verified Gitleaks '+version+' installed in the excluded security-tools directory.');

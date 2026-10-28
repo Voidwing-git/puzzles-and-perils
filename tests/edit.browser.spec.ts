@@ -1,0 +1,36 @@
+import { test, expect } from '@playwright/test';
+
+test('edit active puzzle, save removed pieces, reveal into party tray and place', async ({ page }) => {
+  await page.goto('/');
+  const originalTitle = await page.locator('#puzzle-title').innerText();
+  await page.locator('#edit-puzzle').click();
+  await expect(page.locator('#authoring h1')).toHaveText('Edit current puzzle');
+  await page.locator('#draft-recovery').selectOption('tray');
+  const piece = page.locator('#draft-board button[aria-label^="Remove"]:enabled').first();
+  const index = await piece.evaluate(el => [...el.parentElement!.children].indexOf(el));
+  await piece.click();
+  await page.locator('#return-gm').click();
+  await expect(page.locator('#board button').nth(index)).toHaveClass(/occupied/);
+  await page.locator('#edit-puzzle').click();
+  await expect(page.locator('#draft-summary')).toContainText('0 removed');
+  await page.locator('#draft-recovery').selectOption('tray');
+  await page.locator('#draft-board button').nth(index).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.locator('#play-screen')).toBeVisible();
+  await expect(page.locator('#puzzle-title')).toHaveText(originalTitle);
+  await expect(page.locator('#board button').nth(index)).toHaveClass(/empty/);
+  await expect(page.locator('#piece-tray button')).toHaveCount(0);
+  await page.locator('#edit-puzzle').click();
+  await expect(page.locator('#draft-summary')).toContainText('1 removed');
+  await page.locator('#return-gm').click();
+  await page.locator('#piece-tray .unknown-piece').first().click({button:'right'}); await page.getByRole('menuitem',{name:'Give piece to players',exact:true}).click();
+  await expect(page.locator('#piece-tray button')).toHaveCount(1);
+  await expect(page.locator('#board button').nth(index)).toHaveClass(/empty/);
+  await expect(page.locator('#tray-status')).toContainText('1 available');
+  await page.locator('#piece-tray button').click();
+  await page.locator('#board button').nth(index).click();
+  await page.locator('#place-piece').click();
+  await expect(page.locator('#board button').nth(index)).toHaveClass(/occupied/);
+  await expect(page.locator('#piece-tray button')).toHaveCount(0);
+});

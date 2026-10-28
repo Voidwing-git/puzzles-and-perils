@@ -1,0 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {auditTree,auditArchives} from './privacy-audit.mjs';
+
+const root=path.resolve(process.argv[2]??'.release/pages'),mode=process.argv[3]??'site';
+if(!['site','source','archives'].includes(mode))throw Error('Unknown security scan mode.');
+const report=mode==='archives'?auditArchives(root):auditTree(root,mode);
+const executable=path.resolve('.security-tools/gitleaks-8.30.1/bin',process.platform==='win32'?'gitleaks.exe':'gitleaks');
+if(!fs.existsSync(executable))throw Error('Install the checksum-pinned scanner with npm run security:install.');
+fs.mkdirSync('.security-tools/reports',{recursive:true});
+const reportPath=path.resolve('.security-tools/reports/gitleaks-'+mode+'.json');
+const configPath=path.resolve('.security-tools/reports/scanner-config.toml');
+fs.writeFileSync(configPath,'[extend]\nuseDefault = true\n');
+const scan=spawnSync(executable,['dir',root,'--config',configPath,'--gitleaks-ignore-path',root,'--ignore-gitleaks-allow','--no-banner','--redact=100','--max-decode-depth','2','--max-archive-depth','2','--report-format','json','--report-path',reportPath],{encoding:'utf8',maxBuffer:8*1024*1024});
+if(scan.error||![0,1].includes(scan.status))throw Error('Secret scanner failed; publication remains blocked.');
+const leaks=fs.existsSync(reportPath)?JSON.parse(fs.readFileSync(reportPath,'utf8')):[];
+const redacted=leaks.map(leak=>({rule:leak.RuleID,file:path.relative(root,path.resolve(leak.File)).replaceAll('\\','/'),line:leak.StartLine}));
+const summary={...report,scanner:'gitleaks 8.30.1',secretFindings:redacted};
+fs.writeFileSync('.security-tools/reports/'+mode+'-summary.json',JSON.stringify(summary,null,2));
+console.log(JSON.stringify(summary,null,2));if(report.findings.length||leaks.length||scan.status!==0)process.exitCode=1;

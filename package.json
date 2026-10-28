@@ -1,0 +1,38 @@
+{
+  "name": "puzzles-and-perils",
+  "version": "0.8.2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host localhost --port 5173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && vite build",
+    "preview": "vite preview --host localhost --port 4173 --strictPort",
+    "test": "node --test tests/core.test.ts tests/shared.test.ts tests/manifest.test.ts tests/token.test.ts tests/m3.test.ts tests/cube.test.ts tests/m4.test.ts tests/security.test.ts tests/m5-release.test.mjs",
+    "test:browser": "playwright test",
+    "check": "npm run test && npm run build && npm run test:browser",
+    "security:install": "node scripts/install-scanner.mjs",
+    "security:site": "node scripts/security-check.mjs .release/pages site",
+    "security:source": "node scripts/security-check.mjs .release/repository source",
+    "release:prepare": "node scripts/release.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0",
+    "@types/node": "26.6.5",
+    "@types/three": "0.186.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.4"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@owlbear-rodeo/sdk": "3.1.0",
+    "three": "0.186.1"
+  },
+  "overrides": {
+    "@owlbear-rodeo/sdk": {
+      "uuid": "11.1.1"
+    }
+  }
+}
