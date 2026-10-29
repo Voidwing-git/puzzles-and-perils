@@ -204,10 +204,16 @@ for (let index = 0; index < snapshot.tiles.length; index++) {
     focusIndex = index;
     updateTabStops();
   });
-  button.addEventListener('click', () => {
+  button.addEventListener('click', (event) => {
     selected = index;
     render();
     enqueue('select', index);
+    // A continuous four-click burst reports 1, 2, 3, 4. Some browsers emit
+    // dblclick only for the first pair; count every completed pair ourselves.
+    // Touch pointer-up already handles its pair, so ignore synthesized clicks.
+    if(event.detail>0&&event.detail%2===0&&!(lastTouch.index===index&&performance.now()-lastTouch.time<700)){
+      event.preventDefault();if(canRotate())enqueue('rotate',index);
+    }
   });
   button.addEventListener('contextmenu', event => {
     const tile=snapshot.tiles[index]; if(!tile || tile.terminal) return;
@@ -222,14 +228,6 @@ for (let index = 0; index < snapshot.tiles.length; index++) {
       const id=placed?.id??provisional;
       if(id)enqueue('return-piece',undefined,undefined,id);else enqueue('recall-piece',index);
     },'placed');
-  });
-  button.addEventListener('dblclick', (event) => {
-    event.preventDefault();
-    // Touch double-taps are handled below. Some browsers also synthesize
-    // dblclick; counting both would rotate a piece twice.
-    if (lastTouch.index === index && performance.now() - lastTouch.time < 700) return;
-    selected = index;
-    if (canRotate()) enqueue('rotate', index);
   });
   button.addEventListener('pointerdown', event => {
     if (event.pointerType !== 'touch') return;

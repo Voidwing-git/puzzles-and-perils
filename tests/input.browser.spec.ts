@@ -12,7 +12,7 @@ for(const cube of [false,true])test(`two consecutive double-clicks rotate twice 
   const x=cube?box.x+box.width/2+(local%3-1)*box.height*.22-box.height*.025:box.x+box.width/2;
   const y=cube?box.y+box.height/2+(Math.floor(local/3)-1)*box.height*.22+box.height*.02:box.y+box.height/2;
   // Native click counts keep increasing during a quick four-click burst.
-  for(let clickCount=1;clickCount<=4;clickCount++)await page.mouse.click(x,y,{clickCount,delay:15});
+  for(let clickCount=1;clickCount<=4;clickCount++){await page.mouse.move(x,y);await page.mouse.down({clickCount});await page.mouse.up({clickCount});}
   await expect(page.locator('#revision')).toHaveText('Revision 2');
   await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','false');
 });
@@ -29,7 +29,8 @@ test('a failed first rotation cancels buffered rotations instead of retrying the
     };
   });
   const box=(await page.locator('[data-index="6"]').boundingBox())!;
-  for(let clickCount=1;clickCount<=4;clickCount++)await page.mouse.click(box.x+box.width/2,box.y+box.height/2,{clickCount,delay:10});
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);
+  for(let clickCount=1;clickCount<=4;clickCount++){await page.mouse.down({clickCount});await page.mouse.up({clickCount});}
   await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','true');
   await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','false');
   await expect(page.locator('#feedback')).toContainText('Private save unavailable');

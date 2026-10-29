@@ -50,8 +50,15 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       { id: 'token-a', type: 'IMAGE', name: 'Puzzle A', metadata: { unrelated: 'keep-a' } },
       { id: 'token-b', type: 'IMAGE', name: 'Puzzle B', metadata: { unrelated: 'keep-b' } },
     ];
+    const heldWriteAcks:(()=>void)[]=[];
+    document.addEventListener('release-write-acks',()=>{
+      document.body.dataset.holdWriteAck='false';heldWriteAcks.splice(0).forEach(release=>release());
+    });
     const send = (frame: HTMLIFrameElement, id: string, data: unknown) => {
-      const delay=id.startsWith('OBR_SCENE_ITEMS_UPDATE_ITEMS_RESPONSE')?Number(document.body.dataset.writeAckDelay??document.body.dataset.sdkDelay??0):Number(document.body.dataset.sdkDelay??0);
+      if(id.startsWith('OBR_SCENE_ITEMS_UPDATE_ITEMS_RESPONSE')&&document.body.dataset.holdWriteAck==='true'){
+        heldWriteAcks.push(()=>send(frame,id,data));return;
+      }
+      const delay=Number(document.body.dataset.sdkDelay??0);
       if(delay)setTimeout(()=>frame.contentWindow?.postMessage({id,data},extensionOrigin),delay);
       else frame.contentWindow?.postMessage({id,data},extensionOrigin);
     };
@@ -462,19 +469,17 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     await target.scrollIntoViewIfNeeded();const box=(await target.boundingBox())!,local=index%9;
     const x=cube?box.x+box.width/2+(local%3-1)*box.height*.22-box.height*.025:box.x+box.width/2;
     const y=cube?box.y+box.height/2+(Math.floor(local/3)-1)*box.height*.22+box.height*.02:box.y+box.height/2;
-    await page.locator('body').evaluate(body=>{body.dataset.writeAckDelay='900';});
+    await page.locator('body').evaluate(body=>{body.dataset.holdWriteAck='true';});
     await page.mouse.dblclick(x,y,{delay:20});
     await expect(gm.locator('.demo-banner')).toContainText('private preparation missing');
-    // Stay in the gap long enough to catch premature clearing of pending input.
-    await page.waitForTimeout(350);
     await expect(gm.locator('#rotate')).toHaveAttribute('aria-busy','true');
     await page.mouse.dblclick(x,y,{delay:20});
+    await page.evaluate(()=>document.dispatchEvent(new Event('release-write-acks')));
     await expect(gm.locator('#revision')).toHaveText('Revision 2');
     await expect(gm.locator('#rotate')).toHaveAttribute('aria-busy','false');
     await expect(gm.locator('#rotate')).toBeEnabled();
     const after=(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle;
     expect(after.tiles[index]!.rotation).toBe((puzzle.tiles[index]!.rotation+2)%4);
-    await page.locator('body').evaluate(body=>{body.dataset.writeAckDelay='0';});
   }
   expect(errors).toEqual([]);
 });
