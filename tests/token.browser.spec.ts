@@ -51,7 +51,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       { id: 'token-b', type: 'IMAGE', name: 'Puzzle B', metadata: { unrelated: 'keep-b' } },
     ];
     const send = (frame: HTMLIFrameElement, id: string, data: unknown) => {
-      const delay=Number(document.body.dataset.sdkDelay??0);
+      const delay=id.startsWith('OBR_SCENE_ITEMS_UPDATE_ITEMS_RESPONSE')?Number(document.body.dataset.writeAckDelay??document.body.dataset.sdkDelay??0):Number(document.body.dataset.sdkDelay??0);
       if(delay)setTimeout(()=>frame.contentWindow?.postMessage({id,data},extensionOrigin),delay);
       else frame.contentWindow?.postMessage({id,data},extensionOrigin);
     };
@@ -449,5 +449,32 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(gm.locator('#feedback')).toHaveText('Private backup restored.');
   await player.locator('#cube-square').selectOption(String(cubeIndex));await player.locator('#rotate').click();
   await expect(player.locator('#revision')).toHaveText('Revision 7');await expect(gm.locator('#revision')).toHaveText('Revision 7');
+  // A metadata update may precede the background's durable private-save commit.
+  // Buffer a second actual double-click during that temporary GM read-only gap.
+  for(const cube of [false,true]){
+    await expect(gm.locator('#open-setup')).toBeEnabled();await gm.locator('#open-setup').click();
+    await gm.locator('#setup-kind').selectOption(cube?'cube':'relay');await gm.locator('#draft-free').check();
+    await gm.locator('#publish-draft').click();await expect(gm.locator('#sync-players')).toBeEnabled();
+    const puzzle=(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle;
+    const index=cube?puzzle.tiles.findIndex(tile=>tile&&!tile.terminal):6;
+    if(cube)await gm.locator('#cube-square').selectOption(String(index));
+    const target=gm.locator(cube?'#cube-board canvas':`[data-index="${index}"]`);
+    await target.scrollIntoViewIfNeeded();const box=(await target.boundingBox())!,local=index%9;
+    const x=cube?box.x+box.width/2+(local%3-1)*box.height*.22-box.height*.025:box.x+box.width/2;
+    const y=cube?box.y+box.height/2+(Math.floor(local/3)-1)*box.height*.22+box.height*.02:box.y+box.height/2;
+    await page.locator('body').evaluate(body=>{body.dataset.writeAckDelay='900';});
+    await page.mouse.dblclick(x,y,{delay:20});
+    await expect(gm.locator('.demo-banner')).toContainText('private preparation missing');
+    // Stay in the gap long enough to catch premature clearing of pending input.
+    await page.waitForTimeout(350);
+    await expect(gm.locator('#rotate')).toHaveAttribute('aria-busy','true');
+    await page.mouse.dblclick(x,y,{delay:20});
+    await expect(gm.locator('#revision')).toHaveText('Revision 2');
+    await expect(gm.locator('#rotate')).toHaveAttribute('aria-busy','false');
+    await expect(gm.locator('#rotate')).toBeEnabled();
+    const after=(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle;
+    expect(after.tiles[index]!.rotation).toBe((puzzle.tiles[index]!.rotation+2)%4);
+    await page.locator('body').evaluate(body=>{body.dataset.writeAckDelay='0';});
+  }
   expect(errors).toEqual([]);
 });

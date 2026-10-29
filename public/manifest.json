@@ -1,6 +1,6 @@
 {
   "name": "Puzzles & Perils",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "manifest_version": 1,
   "description": "Arcane stone-channel puzzles with private backups, restore, undo and pause.",
   "icon": "/icon.svg",

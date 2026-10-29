@@ -165,7 +165,7 @@ export class OwlbearAdapter {
     // The token update can arrive before the background finishes its private
     // commit. Reconcile when that commit reaches this same-origin window.
     window.addEventListener('storage',event=>{
-      if(event.key===privateStorageKey(this.privateScope))void refresh(true);
+      if(event.key===privateStorageKey(this.privateScope)){this.#changes.notify();void refresh(true);}
     });
     await refresh();
   }
@@ -218,9 +218,24 @@ export class OwlbearAdapter {
           const version=this.#changes.version;
           await this.#read();
           const receipt = this.#shared?.receipts.find(r => r.id === request.id && r.connection === this.#connection);
-          if (receipt){await this.#refresh?.();return receipt.accepted
-            ? { accepted: true as const, snapshot: this.snapshot() }
-            : { accepted: false as const, snapshot: this.snapshot(), reason: receipt.reason as Rejection };}
+          if (receipt){
+            await this.#refresh?.();
+            if(receipt.accepted&&this.#gm){
+              // Public metadata can acknowledge before the background commits
+              // its private save. Keep this action pending through that gap so
+              // the UI can buffer the next gesture instead of dropping it.
+              const commitDeadline=Date.now()+2000;
+              while(!this.privatePreparation()){
+                const commitVersion=this.#changes.version;
+                if(Date.now()>=commitDeadline)throw new Error('Private save acknowledgment unavailable. Reopen the puzzle to reconcile.');
+                await this.#changes.wait(commitVersion,Math.min(100,commitDeadline-Date.now()));
+                await this.#refresh?.();
+              }
+            }
+            return receipt.accepted
+              ? { accepted: true as const, snapshot: this.snapshot() }
+              : { accepted: false as const, snapshot: this.snapshot(), reason: receipt.reason as Rejection };
+          }
           await this.#changes.wait(version,Math.max(0,Math.min(200,deadline-Date.now())));
         }
       }

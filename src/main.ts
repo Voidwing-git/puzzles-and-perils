@@ -26,6 +26,10 @@ let selected: number | null = null;
 let focusIndex = 0;
 let activeFixture: FixtureId = 'relay';
 let queuedActions = 0;
+let queuedRotations = 0;
+let rotationContext = '';
+let rotationEpoch = 0;
+let inputEpoch = 0;
 let publishing = false;
 let actionQueue = Promise.resolve();
 let visualTransition = Promise.resolve();
@@ -258,8 +262,15 @@ function updateTabStops() {
   Array.from(board.children).forEach((child, index) => { (child as HTMLButtonElement).tabIndex = index === focusIndex ? 0 : -1; });
 }
 
+function inputContext(){
+  return JSON.stringify([snapshot.puzzleId,adapter.viewer,snapshot.participants[snapshot.activeIndex].id]);
+}
 function canRotate(): boolean {
-  return (!(adapter instanceof OwlbearAdapter) || (adapter.available&&(!adapter.pending||queuedActions>0))) && !snapshot.paused && !snapshot.solved &&
+  // A public update may arrive before its matching private save. Keep accepting
+  // gestures for our already-authorized burst; each queued move still performs
+  // fresh controller checks. An unrelated pending action grants no such buffer.
+  const buffered=queuedRotations>0&&rotationEpoch===inputEpoch&&rotationContext===inputContext();
+  return (!(adapter instanceof OwlbearAdapter) || ((adapter.available||buffered)&&(!adapter.pending||queuedActions>0))) && !snapshot.paused && !snapshot.solved &&
     (snapshot.mode==='free'?adapter.freePlayAllowed:snapshot.participants.some(player=>player.id===adapter.viewer)&&adapter.viewer===snapshot.participants[snapshot.activeIndex].id) && selected !== null &&
     snapshot.tiles[selected] !== null && !snapshot.tiles[selected]?.terminal;
 }
@@ -323,7 +334,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.8.4 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.8.5 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
@@ -384,11 +395,21 @@ function enqueue(type: Command['type'], tileIndex?: number, mode?: 'turns' | 'fr
   // Inspection needs no controller round trip unless it rolls back a turn edit.
   // Keep this check here and in send(): queued moves can change the edit state.
   if(type==='select'&&queuedActions===0&&(snapshot.paused||snapshot.mode==='free'||snapshot.solved||adapter.viewer!==snapshot.participants[snapshot.activeIndex].id||!snapshot.turnEdit||snapshot.turnEdit.tileIndex===tileIndex))return;
+  const context=inputContext(),epoch=inputEpoch;
+  if(type==='rotate'){
+    if(queuedRotations===0||rotationEpoch!==epoch||rotationContext!==context){rotationContext=context;rotationEpoch=epoch;}
+    queuedRotations++;
+  }
   queuedActions++;
   render();
   actionQueue = actionQueue.then(async () => {
-    try { await send(type, tileIndex, mode, pieceId, destination, playerIds); }
-    finally { queuedActions--; render(); }
+    try {
+      // Do not replay old gestures into a replacement puzzle, another viewer's
+      // turn, or after a rejected/uncertain action in the same burst.
+      if((type==='rotate'||type==='select')&&(epoch!==inputEpoch||context!==inputContext()))return;
+      await send(type, tileIndex, mode, pieceId, destination, playerIds);
+    }
+    finally { if(type==='rotate')queuedRotations--;queuedActions--; render(); }
   });
 }
 
@@ -415,6 +436,7 @@ async function send(type: Command['type'], tileIndex?: number, mode?: 'turns' | 
   render();
   try {
     const result = await request;
+    if(!result.accepted)inputEpoch++;
     await displaySnapshot(result.snapshot, result.accepted && type === 'rotate' ? tileIndex : undefined);
     if (result.accepted && type === 'return-piece' && pieceId)
       element<HTMLSelectElement>('inventory').value = pieceId;
@@ -437,6 +459,7 @@ async function send(type: Command['type'], tileIndex?: number, mode?: 'turns' | 
             : snapshot.solved ? 'Turn committed.' : `Rotation kept. Turn advanced to ${snapshot.participants[snapshot.activeIndex].name}.`
       : rejectionMessages[result.reason];
   } catch (error) {
+    inputEpoch++;
     feedback.textContent = error instanceof Error ? error.message : 'The action could not complete.';
   }
   render();

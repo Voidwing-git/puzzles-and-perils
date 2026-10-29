@@ -1,5 +1,43 @@
 import { test, expect } from '@playwright/test';
 
+for(const cube of [false,true])test(`two consecutive double-clicks rotate twice while the first move is pending: cube ${cube}`,async({page})=>{
+  await page.goto('/');
+  let index=6;
+  if(cube){
+    await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').uncheck();await page.locator('#publish-draft').click();
+    index=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state.tiles.findIndex((tile:{terminal?:string}|null)=>tile&&!tile.terminal));
+    await page.locator('#cube-square').selectOption(String(index));
+  }
+  const target=page.locator(cube?'#cube-board canvas':`[data-index="${index}"]`),box=(await target.boundingBox())!,local=index%9;
+  const x=cube?box.x+box.width/2+(local%3-1)*box.height*.22-box.height*.025:box.x+box.width/2;
+  const y=cube?box.y+box.height/2+(Math.floor(local/3)-1)*box.height*.22+box.height*.02:box.y+box.height/2;
+  // Native click counts keep increasing during a quick four-click burst.
+  for(let clickCount=1;clickCount<=4;clickCount++)await page.mouse.click(x,y,{clickCount,delay:15});
+  await expect(page.locator('#revision')).toHaveText('Revision 2');
+  await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','false');
+});
+
+test('a failed first rotation cancels buffered rotations instead of retrying them silently',async({page})=>{
+  await page.goto('/');
+  await page.evaluate(()=>{
+    const timeout=window.setTimeout;
+    window.setTimeout=((handler:TimerHandler,delay?:number,...args:unknown[])=>timeout(handler,delay===90?400:delay,...args)) as typeof window.setTimeout;
+    const original=Storage.prototype.setItem;let first=true;
+    Storage.prototype.setItem=function(key:string,value:string){
+      if(key==='arcane-pipes:private:m3:local:active'&&first){first=false;throw new Error('One failed write');}
+      return original.call(this,key,value);
+    };
+  });
+  const box=(await page.locator('[data-index="6"]').boundingBox())!;
+  for(let clickCount=1;clickCount<=4;clickCount++)await page.mouse.click(box.x+box.width/2,box.y+box.height/2,{clickCount,delay:10});
+  await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','true');
+  await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  await expect(page.locator('#feedback')).toContainText('Private save unavailable');
+  await expect(page.locator('#revision')).toHaveText('Revision 0');
+  await page.locator('#rotate').click();
+  await expect(page.locator('#revision')).toHaveText('Revision 1');
+});
+
 for(const cube of [false,true])test(`Space outside board buttons ignores repeats and form controls: cube ${cube}`,async({page})=>{
   await page.goto('/');
   if(cube){
