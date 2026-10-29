@@ -26,7 +26,7 @@ export async function registerTokenEntry() {
       void (async () => {
         if (await OBR.player.getRole() !== 'GM' || context.items.length !== 1) return;
         const id = context.items[0].id;
-        const item = (await OBR.scene.items.getItems(item => item.id === id))[0];
+        const item = (await OBR.scene.items.getItems([id]))[0];
         if (item) await open(item);
       })().catch(report);
     },
@@ -53,14 +53,14 @@ export async function registerTokenEntry() {
 
 export async function tokenMetadata(tokenId: string, requireFinalized = true) {
   if (!await OBR.scene.isReady()) throw new Error('Open the scene containing this puzzle token.');
-  const token = (await OBR.scene.items.getItems(item => item.id === tokenId))[0];
+  const token = (await OBR.scene.items.getItems([tokenId]))[0];
   if (!token || (requireFinalized && token.metadata[TOKEN_KEY] !== true)) throw new Error('This token has no finalized puzzle, or is no longer in this scene.');
   return token.metadata;
 }
 
 export async function writeTokenMetadata(tokenId: string, update: Record<string, unknown>) {
-  await tokenMetadata(tokenId, false);
-  await OBR.scene.items.updateItems(item => item.id === tokenId, items => {
+  if (!await OBR.scene.isReady()) throw new Error('Open the scene containing this puzzle token.');
+  await OBR.scene.items.updateItems([tokenId], items => {
     if (items.length !== 1) throw new Error('Puzzle token is unavailable.');
     // Only our namespaced value changes; never spread a request into metadata.
     items[0].metadata[KEY] = update[KEY];

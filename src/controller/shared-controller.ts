@@ -2,7 +2,7 @@ import { createFixture } from '../core/fixtures.ts';
 import { projectPublic } from '../core/projection.ts';
 import { assertFits, KEY, parseRequest } from '../transport/protocol.ts';
 import type { Shared } from '../transport/protocol.ts';
-import { readPrivate, savePrivate,discardPrivate } from '../core/private-store.ts';
+import { readPrivate, readValidatedPrivate, savePrivate,discardPrivate } from '../core/private-store.ts';
 import { applyAdventure } from '../core/adventure.ts';
 import {validatePreparation} from '../core/save-format.ts';
 import {puzzleEvent} from '../core/event-history.ts';
@@ -90,8 +90,7 @@ export class SharedController {
         if (shared.version !== 1 || shared.owner !== this.connection || request.generation !== shared.generation) return;
         if (shared.receipts.some(r => r.id === request.id && r.connection === sender)) return;
         const identity = { id: actor.id, role: actor.role, name:actor.name };
-        const rawSaved = typeof localStorage === 'undefined' ? null : readPrivate(privateKey);
-        const saved=rawSaved?validatePreparation(rawSaved):null;
+        const saved = typeof localStorage === 'undefined' ? null : readValidatedPrivate(privateKey);
         if (saved && (saved.state.puzzleId !== shared.puzzle.puzzleId||saved.state.revision!==shared.puzzle.revision)) throw new Error('Private/public puzzle mismatch. Controller paused. Import a private backup to recover.');
         if (!saved && !shared.fixture) throw new Error('Private puzzle unavailable. Keep the original GM browser open.');
         const preparation = saved ?? createFixture(shared.fixture ?? 'relay', shared.puzzle.puzzleId);

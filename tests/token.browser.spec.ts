@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile,writeFile } from 'node:fs/promises';
 import type { PrivatePreparation,PublicPuzzle } from '../src/core/state.ts';
 
 // Local SDK host double. Public UI routes are real compiled code; Owlbear's
@@ -50,7 +50,11 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       { id: 'token-a', type: 'IMAGE', name: 'Puzzle A', metadata: { unrelated: 'keep-a' } },
       { id: 'token-b', type: 'IMAGE', name: 'Puzzle B', metadata: { unrelated: 'keep-b' } },
     ];
-    const send = (frame: HTMLIFrameElement, id: string, data: unknown) => frame.contentWindow?.postMessage({ id, data }, extensionOrigin);
+    const send = (frame: HTMLIFrameElement, id: string, data: unknown) => {
+      const delay=Number(document.body.dataset.sdkDelay??0);
+      if(delay)setTimeout(()=>frame.contentWindow?.postMessage({id,data},extensionOrigin),delay);
+      else frame.contentWindow?.postMessage({id,data},extensionOrigin);
+    };
     const mount = (name: string, url: string, peer: Peer, hidden = false) => {
       document.getElementById(name)?.remove();
       const frame = document.createElement('iframe'); frame.id = name;
@@ -114,7 +118,8 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       else if (id === 'OBR_VIEWPORT_GET_HEIGHT') response = {height:1100};
       else if (id === 'OBR_PARTY_GET_PLAYERS') response = {players:peers.filter(p=>p.connectionId!==source.peer.connectionId)};
       else if (id === 'OBR_SCENE_IS_READY') response = {ready:sceneReady};
-      else if (id === 'OBR_SCENE_ITEMS_GET_ALL_ITEMS') response = {items:tokens};
+      else if (id === 'OBR_SCENE_ITEMS_GET_ALL_ITEMS') {document.body.dataset.allItemReads=String(Number(document.body.dataset.allItemReads??0)+1);response = {items:tokens};}
+      else if (id === 'OBR_SCENE_ITEMS_GET_ITEMS') response={items:tokens.filter(t=>data.ids.includes(t.id))};
       else if (id === 'OBR_SCENE_ITEMS_UPDATE_ITEMS') {
         for (const update of data.updates) Object.assign(tokens.find(t=>t.id===update.id)!, update);
         frames.forEach(f=>send(f.frame,'OBR_SCENE_ITEMS_EVENT_CHANGE',{items:tokens}));
@@ -208,9 +213,17 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await hostAction('Open puzzle A');
   // The default roster now follows players joining the room automatically.
   await expect(player.locator('#active-player')).toHaveText('Player’s turn');
+  await expect(gm.locator('#sync-players')).toBeEnabled();
+  await page.locator('body').evaluate(body=>{body.dataset.sdkDelay='40';body.dataset.allItemReads='0';});
+  const rotationTimings:{view:string;milliseconds:number;wholeSceneReads:number}[]=[];
+  const twoDStarted=performance.now();
   await player.locator('[data-index="6"]').dblclick();
   await expect(gm.locator('#revision')).toHaveText('Revision 4');
   await expect(player.locator('#rotate')).toBeEnabled();
+  await expect(player.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  rotationTimings.push({view:'2D double-click',milliseconds:Math.round(performance.now()-twoDStarted),wholeSceneReads:Number(await page.locator('body').getAttribute('data-all-item-reads'))});
+  expect(rotationTimings.at(-1)!.wholeSceneReads).toBe(0);
+  await page.locator('body').evaluate(body=>{body.dataset.sdkDelay='0';});
   await expect(gm.locator('#sync-players')).toBeEnabled();
   for (const view of [gm, player]) {
     const rotated = view.locator('[data-index="6"]');
@@ -370,9 +383,16 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   expect(cubeRecord.puzzle.cubeFaces).toEqual(['front','right']);
   const cubeIndex=cubeRecord.puzzle.tiles.findIndex((tile:{terminal?:string}|null)=>tile&&!tile.terminal);
   await player.locator('#cube-square').selectOption(String(cubeIndex));
+  await page.locator('body').evaluate(body=>{body.dataset.sdkDelay='40';body.dataset.allItemReads='0';});
+  const cubeStarted=performance.now();
   await player.locator('#rotate').click();
   await expect(player.locator('#revision')).toHaveText('Revision 1');
   await expect(gm.locator('#revision')).toHaveText('Revision 1');
+  await expect(player.locator('#rotate')).toHaveAttribute('aria-busy','false');
+  rotationTimings.push({view:'3D rotation',milliseconds:Math.round(performance.now()-cubeStarted),wholeSceneReads:Number(await page.locator('body').getAttribute('data-all-item-reads'))});
+  expect(rotationTimings.at(-1)!.wholeSceneReads).toBe(0);
+  await page.locator('body').evaluate(body=>{body.dataset.sdkDelay='0';});
+  await writeFile(process.env.ROTATION_PROFILE_PATH??'docs/evidence/rotation-latency.json',JSON.stringify({sdkResponseDelayMs:40,measurements:rotationTimings},null,2));
   await page.locator('#player-window').evaluate((frame:HTMLIFrameElement)=>{frame.src=frame.src;});
   await expect(player.locator('#cube-board canvas')).toBeVisible();
   await expect(player.locator('#revision')).toHaveText('Revision 1');

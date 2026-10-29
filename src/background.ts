@@ -13,10 +13,10 @@ OBR.onReady(async () => {
   await navigator.locks.request(`arcane-pipes:${OBR.room.id}:${backgroundConnection}`, { ifAvailable: true }, async lock => {
     if (!lock) return;
     const connection = await OBR.player.getConnectionId();
-    const peers = async () => [
-      ...(await OBR.party.getPlayers()).filter(p => p.connectionId !== connection),
-      { id: OBR.player.id, connectionId: connection, role: await OBR.player.getRole(), name: await OBR.player.getName() },
-    ];
+    const peers = async () => {
+      const [players,role,name]=await Promise.all([OBR.party.getPlayers(),OBR.player.getRole(),OBR.player.getName()]);
+      return [...players.filter(p=>p.connectionId!==connection),{id:OBR.player.id,connectionId:connection,role,name}];
+    };
     const controller = new SharedController(connection, {
       peers,
       read: () => OBR.room.getMetadata(),

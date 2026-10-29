@@ -3,14 +3,15 @@ import { createFixture } from '../core/fixtures.ts';
 import { projectPublic } from '../core/projection.ts';
 import type { Command, PublicPuzzle } from '../core/state.ts';
 import type { Rejection } from '../core/commands.ts';
-import { CHANNEL, KEY } from './protocol.ts';
+import { CHANNEL, KEY, TOKEN_KEY } from './protocol.ts';
 import type { Shared, Request } from './protocol.ts';
 import type { FixtureId } from '../core/fixtures.ts';
 import { tokenMetadata } from './token-entry.ts';
 import { PlayerRehearsal } from '../controller/player-rehearsal.ts';
-import { readPrivate, savePrivate, privateStorageKey } from '../core/private-store.ts';
+import { readValidatedPrivate, savePrivate, privateStorageKey } from '../core/private-store.ts';
 import type { PrivatePreparation } from '../core/state.ts';
 import {validatePreparation,rekeyPreparation} from '../core/save-format.ts';
+import {ChangeSignal} from './change-signal.ts';
 
 export class OwlbearAdapter {
   #shared?: Shared;
@@ -27,6 +28,10 @@ export class OwlbearAdapter {
   #previewActor = '';
   #roomPlayers: {id:string;name:string}[]=[];
   #syncingRoster=false;
+  #changes=new ChangeSignal();
+  #readVersion=0;
+  #appliedRead=0;
+  #readOkay=false;
   #refresh:(()=>Promise<void>)|undefined;
   get roomPlayers() {return structuredClone(this.#roomPlayers);}
   get preview() { return this.#rehearsal !== null; }
@@ -42,7 +47,7 @@ export class OwlbearAdapter {
   privatePreparation() {
     if (!this.#gm || this.preview) return null;
     let preparation:PrivatePreparation|null;
-    try{const saved=readPrivate(this.privateScope);preparation=saved?validatePreparation(saved):null;}catch{return null;}
+    try{preparation=readValidatedPrivate(this.privateScope);}catch{return null;}
     if (!preparation || !this.#shared || preparation.state.puzzleId !== this.#shared.puzzle.puzzleId||preparation.state.revision!==this.#shared.puzzle.revision) return null;
     // Public metadata is authoritative for current rotations/inventory.
     preparation.state = structuredClone(this.#shared.puzzle);
@@ -69,8 +74,8 @@ export class OwlbearAdapter {
     await OBR.broadcast.sendMessage(CHANNEL, request, { destination: 'ALL' });
     for (let i = 0; i < 25; i++) {
       await new Promise(resolve => setTimeout(resolve, 200));
-      this.#shared = await this.#read();
-      if (this.#shared?.puzzle.puzzleId === preparation.state.puzzleId) { await this.#refresh?.();this.#notify(); return this.snapshot(); }
+      const shared=await this.#read();
+      if (shared?.puzzle.puzzleId === preparation.state.puzzleId) { await this.#refresh?.();this.#notify(); return this.snapshot(); }
     }
     throw new Error('Publication unconfirmed. Reopen the window to reconcile before publishing again.');
   }
@@ -90,34 +95,31 @@ export class OwlbearAdapter {
   subscribe(fn: () => void) { this.#listeners.push(fn); }
   #notify() { this.#listeners.forEach(fn => fn()); }
   async #read() {
+    const version=++this.#readVersion;
+    try{
     const metadata = this.#tokenId ? await tokenMetadata(this.#tokenId, !this.#gm) : await OBR.room.getMetadata();
     const shared = metadata[KEY] as Shared | undefined;
-    return shared?.tokenId === this.#tokenId ? shared : undefined;
+    if(version>=this.#appliedRead){this.#appliedRead=version;this.#readOkay=true;this.#shared=shared?.tokenId===this.#tokenId?shared:undefined;}
+    return this.#shared;
+    }catch(error){if(version>=this.#appliedRead){this.#appliedRead=version;this.#readOkay=false;}throw error;}
   }
   async connect() {
     await new Promise<void>(resolve => OBR.onReady(resolve));
     this.#viewer = OBR.player.id;
-    this.#connection = await OBR.player.getConnectionId();
-    this.#gm = await OBR.player.getRole() === 'GM';
+    const [connection,role]=await Promise.all([OBR.player.getConnectionId(),OBR.player.getRole()]);
+    this.#connection=connection;this.#gm=role==='GM';
     this.#ready = true;
-    const refresh = async () => {
-      try { this.#shared = await this.#read(); }
-      catch (error) {
-        this.#available = false;
-        this.status = error instanceof Error ? error.message : 'Puzzle unavailable.';
-        this.#notify();
-        return;
-      }
-      this.#connection = await OBR.player.getConnectionId();
-      const party = await OBR.party.getPlayers();
+    const performRefresh = async () => {
+      try {
+      const [,connection,party,selfRole]=await Promise.all([this.#read(),OBR.player.getConnectionId(),OBR.party.getPlayers(),OBR.player.getRole()]);
+      this.#connection=connection;
       this.#roomPlayers=party.filter(p=>p.role==='PLAYER').filter((p,i,all)=>all.findIndex(q=>q.id===p.id)===i).map(p=>({id:p.id,name:p.name}));
-      const selfRole = await OBR.player.getRole();
       this.#gm = selfRole === 'GM';
       if (!this.#gm) this.#rehearsal = null;
       const gms = party.filter(p => p.role === 'GM' && p.connectionId !== this.#connection).map(p => p.connectionId);
       if (this.#gm) gms.push(this.#connection);
       const privateReady=!this.#gm||!this.#shared||!!this.#shared.fixture||!!this.privatePreparation();
-      this.#available = privateReady && !this.#uncertain && this.#shared?.version === 1 && gms.length === 1 && gms[0] === this.#shared.owner;
+      this.#available = this.#readOkay && privateReady && !this.#uncertain && this.#shared?.version === 1 && gms.length === 1 && gms[0] === this.#shared.owner;
       this.status = this.#uncertain ? 'PAUSED: acknowledgment uncertain. Reopen the action window to reconcile.' :
         !this.#shared ? 'The GM is setting up this puzzle. Players can open it after finalization.' :
         !privateReady?'PAUSED: private preparation missing. Import a private backup from Save / recovery.':
@@ -126,19 +128,44 @@ export class OwlbearAdapter {
           this.#gm ? 'Previous controller disconnected. Explicitly Save changes to reconnect this puzzle.' :
           'PAUSED: waiting for the GM to reconnect and save this puzzle.';
       this.#notify();
-      await this.#syncDefaultRoster();
+      }
+      catch (error) {
+        this.#available = false;
+        this.status = error instanceof Error ? error.message : 'Puzzle unavailable.';
+        this.#notify();
+        return;
+      }
+    };
+    let refreshing:Promise<void>|undefined,dirty=false;
+    const refresh=(invalidate=false):Promise<void>=>{
+      if(refreshing){if(invalidate)dirty=true;return refreshing;}
+      dirty=false;
+      const work=performRefresh();
+      refreshing=work;
+      void work.then(()=>{
+        if(refreshing===work)refreshing=undefined;
+        // A busy scene must not keep an acknowledged move waiting for every
+        // later event. Run a dirty follow-up without extending existing waiters.
+        if(dirty){dirty=false;void refresh();}else void this.#syncDefaultRoster();
+      });
+      return work;
     };
     this.#refresh=refresh;
     if (this.#tokenId) {
-      OBR.scene.items.onChange(() => { void refresh(); });
-      OBR.scene.onReadyChange(() => { void refresh(); });
-    } else OBR.room.onMetadataChange(() => { void refresh(); });
-    OBR.party.onChange(() => { void refresh(); });
-    OBR.player.onChange(() => { void refresh(); });
+      OBR.scene.items.onChange(items => {
+        const token=items.find(item=>item.id===this.#tokenId);
+        // Moving another map token does not change this puzzle or its receipt.
+        if(token?.metadata[TOKEN_KEY]===true&&JSON.stringify(token.metadata[KEY])===JSON.stringify(this.#shared))return;
+        this.#changes.notify();void refresh(true);
+      });
+      OBR.scene.onReadyChange(() => { this.#changes.notify();void refresh(true); });
+    } else OBR.room.onMetadataChange(() => { this.#changes.notify();void refresh(true); });
+    OBR.party.onChange(() => { void refresh(true); });
+    OBR.player.onChange(() => { void refresh(true); });
     // The token update can arrive before the background finishes its private
     // commit. Reconcile when that commit reaches this same-origin window.
     window.addEventListener('storage',event=>{
-      if(event.key===privateStorageKey(this.privateScope))void refresh();
+      if(event.key===privateStorageKey(this.privateScope))void refresh(true);
     });
     await refresh();
   }
@@ -167,33 +194,34 @@ export class OwlbearAdapter {
     if (this.#rehearsal && this.#gm) return this.#rehearsal.request(command, this.#previewActor, _asHost);
     if (this.#pending) throw new Error('Wait for the current puzzle action to finish.');
     if (this.#uncertain) throw new Error(this.status);
-    // Membership/connection IDs can change while the editor is open. Read
-    // them now instead of trusting the last UI notification.
-    this.#shared = await this.#read();
-    this.#connection = await OBR.player.getConnectionId();
-    this.#gm = await OBR.player.getRole() === 'GM';
-    const party = await OBR.party.getPlayers();
-    const gms = party.filter(p => p.role === 'GM' && p.connectionId !== this.#connection).map(p => p.connectionId);
-    if (this.#gm) gms.push(this.#connection);
-    const gmSave = (command.type === 'publish-draft'||command.type==='restore-draft') && this.#gm;
-    if (!gmSave && gms.length > 1) throw new Error('More than one GM connection is open. Close the extra GM room tabs before playing. GM puzzle updates can still be saved.');
-    this.#available = this.#shared?.version === 1 && gms.length === 1 && gms[0] === this.#shared.owner;
-    if (!this.#shared || (!this.#available && !gmSave))
-      throw new Error('The original GM controller is disconnected. Open GM view and explicitly save the puzzle to reconnect. Your edits are kept privately.');
     this.#pending = true;
     this.#notify();
-    const request: Request = { id: crypto.randomUUID(), generation: this.#shared.generation, expiresAt: Date.now() + 6000, tokenId: this.#tokenId, command };
+    let sent=false;
     try {
+      // Retain fresh authority checks, but independent SDK reads need not
+      // wait for one another. Reserve the pending slot before starting IO.
+      const [,connection,role,party]=await Promise.all([this.#read(),OBR.player.getConnectionId(),OBR.player.getRole(),OBR.party.getPlayers()]);
+      this.#connection=connection;this.#gm=role==='GM';
+      const gms=party.filter(p=>p.role==='GM'&&p.connectionId!==connection).map(p=>p.connectionId);
+      if(this.#gm)gms.push(connection);
+      const gmSave=(command.type==='publish-draft'||command.type==='restore-draft')&&this.#gm;
+      this.#available=this.#readOkay&&this.#shared?.version===1&&gms.length===1&&gms[0]===this.#shared.owner;
+      if(!gmSave&&gms.length>1)throw new Error('More than one GM connection is open. Close the extra GM room tabs before playing. GM puzzle updates can still be saved.');
+      if(!this.#shared||(!this.#available&&!gmSave))throw new Error('The original GM controller is disconnected. Open GM view and explicitly save the puzzle to reconnect. Your edits are kept privately.');
+      const request:Request={id:crypto.randomUUID(),generation:this.#shared.generation,expiresAt:Date.now()+6000,tokenId:this.#tokenId,command};
       // Retry the same ID, never a fresh rotation. Durable metadata is the ack.
       for (let attempt = 0; attempt < 3; attempt++) {
+        sent=true;
         await OBR.broadcast.sendMessage(CHANNEL, request, { destination: 'ALL' });
-        for (let poll = 0; poll < 10; poll++) {
-          await new Promise(resolve => setTimeout(resolve, 200));
-          this.#shared = await this.#read();
+        const deadline=Date.now()+2000;
+        while(Date.now()<deadline){
+          const version=this.#changes.version;
+          await this.#read();
           const receipt = this.#shared?.receipts.find(r => r.id === request.id && r.connection === this.#connection);
           if (receipt){await this.#refresh?.();return receipt.accepted
             ? { accepted: true as const, snapshot: this.snapshot() }
             : { accepted: false as const, snapshot: this.snapshot(), reason: receipt.reason as Rejection };}
+          await this.#changes.wait(version,Math.max(0,Math.min(200,deadline-Date.now())));
         }
       }
       this.#available = false;
@@ -201,9 +229,8 @@ export class OwlbearAdapter {
       this.status = 'PAUSED: acknowledgment uncertain. Reopen the action window to reconcile before another move.';
       throw new Error(this.status);
     } catch (error) {
-      this.#uncertain = true;
       this.#available = false;
-      this.status = 'PAUSED: request outcome uncertain. Reopen the action window to reconcile.';
+      if(sent){this.#uncertain=true;this.status='PAUSED: request outcome uncertain. Reopen the action window to reconcile.';}
       throw error;
     } finally { this.#pending = false; this.#notify();void this.#syncDefaultRoster(); }
   }

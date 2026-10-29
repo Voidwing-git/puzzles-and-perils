@@ -1,6 +1,6 @@
 {
   "name": "puzzles-and-perils",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview --host localhost --port 4173 --strictPort",
-    "test": "node --test tests/core.test.ts tests/shared.test.ts tests/manifest.test.ts tests/token.test.ts tests/m3.test.ts tests/cube.test.ts tests/m4.test.ts tests/security.test.ts tests/m5-release.test.mjs tests/free-play.test.ts",
+    "test": "node --test tests/core.test.ts tests/shared.test.ts tests/manifest.test.ts tests/token.test.ts tests/m3.test.ts tests/cube.test.ts tests/m4.test.ts tests/security.test.ts tests/m5-release.test.mjs tests/free-play.test.ts tests/latency.test.ts",
     "test:browser": "playwright test",
     "check": "npm run test && npm run build && npm run test:browser",
     "security:install": "node scripts/install-scanner.mjs",

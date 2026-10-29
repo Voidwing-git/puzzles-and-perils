@@ -288,8 +288,9 @@ function render() {
     const placed = snapshot.placements?.some(p=>p.tileIndex===index) || (snapshot.turnEdit?.placedPiece && snapshot.turnEdit.tileIndex===index);
     const missing = !tile && snapshot.missingSockets?.includes(index);
     button.classList.toggle('replaced-tile',!!placed); button.classList.toggle('missing-tile',!!missing);
-    button.querySelector('.socket-fractures')?.remove();
-    if(placed || missing) button.insertAdjacentHTML('beforeend', socketFractures());
+    const fractures=button.querySelector('.socket-fractures');
+    if(!placed&&!missing)fractures?.remove();
+    else if(!fractures)button.insertAdjacentHTML('beforeend',socketFractures());
     button.setAttribute('aria-label', tileLabel(snapshot, index));
     button.title = tileLabel(snapshot, index) + (placed ? ' · Replaced piece' : missing ? ' · Missing piece' : '');
     button.setAttribute('aria-pressed', String(selected === index));
@@ -322,7 +323,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.8.3 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.8.4 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
