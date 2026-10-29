@@ -1,8 +1,17 @@
 # Puzzles & Perils
 
-A shared pipe puzzle for Owlbear Rodeo. Supports flat boards, connected cube
-faces, a 4 x 4 x 1 dais, GM authoring, missing pieces, turns/free play, private
-backups, undo and pause/resume. Local demonstration names are fictional.
+Shared puzzles for Owlbear Rodeo. Start with a visual puzzle picker: runic
+channels (flat boards, connected cube faces and a 4 x 4 x 1 dais) or lock picking.
+Includes GM authoring, turns/free play, private backups, undo and pause/resume.
+Local demonstration names are fictional.
+
+Lock picking offers Novice (DC 5), Apprentice (DC 10), Adept (DC 15), Expert
+(DC 20) and Master (DC 25). Drag the pick or use arrow keys to set its angle;
+hold Space or the Turn control, releasing when the cylinder binds. Higher tiers
+have narrower opening angles. DCs are table reference labels, not dice rolls.
+Each lock starts with one pick. Sustained pressure at a bad angle breaks it;
+only the GM can give another pick. The opening angle remains in private GM
+storage and private backups. Artwork and preview screenshots are original.
 
 New puzzles default to free play: any connected room member can rotate, place
 and recall pieces without being in the turn order. The default roster follows
@@ -12,7 +21,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.8.5 is a hosted-testing candidate. Live multi-device/table
+Version 0.9.0 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

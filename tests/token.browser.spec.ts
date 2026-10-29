@@ -168,7 +168,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     const button=page.getByRole('button',{name,exact:true});await expect(button).toBeEnabled();await button.press('Enter');
     if(opens){if(previous)await expect.poll(()=>previous.evaluate(el=>el.isConnected)).toBe(false);await expect(frame).toBeVisible();}
   };
-  await hostAction('Make puzzle A');
+  await hostAction('Make puzzle A');await gm.locator('#choose-pipes').click();
   await expect(gm.getByRole('heading', {name:'Make a puzzle',exact:true})).toBeVisible();
   await expect(gm.locator('#draft-size')).toBeEnabled();
   await expect(gm.locator('#draft-board button')).toHaveCount(25);
@@ -193,7 +193,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(gm.locator('#rotate')).toBeDisabled();
   await gm.locator('#viewer').selectOption('__gm__');
   await expect(gm.locator('#revision')).toHaveText('Revision 0');
-  await hostAction('Make puzzle B');
+  await hostAction('Make puzzle B');await gm.locator('#choose-pipes').click();
   await expect(page.locator('#gm-window')).toHaveAttribute('src',/token=token-b/);
   await expect(gm.getByRole('heading',{name:'Make a puzzle',exact:true})).toBeVisible();
   await gm.locator('#setup-kind').selectOption('dual-power');
@@ -254,7 +254,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await gm.locator('body').screenshot({path:'docs/evidence/m2-token-host-double.png'});
   await player.locator('body').screenshot({path:'docs/evidence/m2-token-player-host-double.png'});
   // M3: use the token's real compiled GM/player UI and SDK controller path.
-  await gm.locator('#open-setup').click();
+  await gm.locator('#open-setup').click();await gm.locator('#choose-pipes').click();
   await gm.locator('#setup-kind').selectOption('generated');
   await gm.locator('#draft-size').selectOption('4');
   await gm.getByText('More options', {exact:true}).click();
@@ -379,7 +379,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(player.locator('#turn-order-list li')).toHaveCount(2);
   await expect(player.locator('#turn-order-list li').first()).toContainText('Second player');
   // M3B uses the same real compiled publication/controller route.
-  await gm.locator('#open-setup').click();
+  await gm.locator('#open-setup').click();await gm.locator('#choose-pipes').click();
   await gm.locator('#setup-kind').selectOption('cube');
   await gm.locator('#draft-free').check();
   await expect(gm.locator('#draft-cube canvas')).toBeVisible();
@@ -459,7 +459,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   // A metadata update may precede the background's durable private-save commit.
   // Buffer a second actual double-click during that temporary GM read-only gap.
   for(const cube of [false,true]){
-    await expect(gm.locator('#open-setup')).toBeEnabled();await gm.locator('#open-setup').click();
+    await expect(gm.locator('#open-setup')).toBeEnabled();await gm.locator('#open-setup').click();await gm.locator('#choose-pipes').click();
     await gm.locator('#setup-kind').selectOption(cube?'cube':'relay');await gm.locator('#draft-free').check();
     await gm.locator('#publish-draft').click();await expect(gm.locator('#sync-players')).toBeEnabled();
     const puzzle=(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle;
@@ -481,5 +481,24 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     const after=(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle;
     expect(after.tiles[index]!.rotation).toBe((puzzle.tiles[index]!.rotation+2)%4);
   }
+  // The second puzzle type uses the same token, authenticated controller and
+  // private storage. Broken picks survive reopening until the GM replaces one.
+  await gm.locator('#open-setup').click();await expect(gm.locator('#puzzle-picker-title')).toHaveText('Choose a puzzle');
+  await gm.locator('#choose-lockpick').click();await gm.locator('[name="lock-difficulty"][value="master"]').check();
+  await gm.locator('#publish-lock').click();await expect(player.locator('#lock-game')).toBeVisible();
+  await expect(player.locator('.lock-difficulty')).toHaveText('Master · DC 25');
+  const opening=await gm.locator('body').evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:token-room:token-a')!).lockSecret.sweetSpot as number);
+  await player.locator('.lock-angle').fill(String(opening>0?-90:90));await player.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
+  await expect(player.locator('#lock-game')).toHaveClass(/pick-broken/,{timeout:15000});await page.keyboard.up('Space');
+  await expect(gm.locator('#lock-game')).toHaveClass(/pick-broken/);
+  await expect(player.locator('.lock-give')).toBeHidden();await expect(player.locator('.lock-torque')).toBeDisabled();
+  await page.locator('#player-window').evaluate((frame:HTMLIFrameElement)=>{frame.src=frame.src;});
+  await expect(player.locator('.lock-status')).toContainText('Waiting for the GM');
+  await gm.locator('.lock-give').click();await expect(player.locator('.lock-angle')).toBeEnabled();
+  await player.locator('.lock-angle').fill(String(opening));await player.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
+  await expect(player.locator('#success-title')).toHaveText('The lock opens');await page.keyboard.up('Space');
+  await expect(gm.locator('#success')).toBeVisible();
+  const lockPublic=await page.locator('#state').innerText();for(const field of ['lockSecret','sweetSpot','tolerance'])expect(lockPublic).not.toContain(field);
+  await page.locator('#gm-window').screenshot({path:'docs/evidence/lockpick-shared-gm.png'});
   expect(errors).toEqual([]);
 });

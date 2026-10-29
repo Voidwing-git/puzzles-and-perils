@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import type { PrivatePreparation } from '../src/core/state.ts';
 
 test('Randomize changes the solved layout repeatedly while retaining settings and the active puzzle', async ({ page }) => {
-  await page.goto('/'); await page.locator('#open-setup').click();
+  await page.goto('/'); await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();
   await page.locator('#draft-size').selectOption('4');
   await page.locator('#draft-powers').selectOption('2');
   await page.locator('#draft-targets').selectOption('1');
@@ -23,7 +23,7 @@ test('Randomize changes the solved layout repeatedly while retaining settings an
 
 test('Make a puzzle shows settings and immediate preview, restores removed pieces, and finalizes explicitly', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', {name:'Make a puzzle',exact:true}).click();
+  await page.getByRole('button', {name:'Make a puzzle',exact:true}).click();await page.locator('#choose-pipes').click();
   await expect(page.getByRole('heading', {name:'Make a puzzle',exact:true})).toBeVisible();
   await expect(page.locator('#draft-size')).toBeVisible();
   await expect(page.locator('#draft-board button')).toHaveCount(25);
@@ -38,7 +38,7 @@ test('Make a puzzle shows settings and immediate preview, restores removed piece
   expect(await page.locator('#authoring').innerText()).not.toMatch(/draft|publish/i);
   await page.getByRole('button',{name:'Back to GM view',exact:true}).click();
   await expect(page.locator('#board button')).toHaveCount(25);
-  await page.getByRole('button',{name:'Make a puzzle',exact:true}).click();
+  await page.getByRole('button',{name:'Make a puzzle',exact:true}).click();await page.locator('#choose-pipes').click();
   await expect(page.locator('#draft-board button')).toHaveCount(36);
   page.once('dialog', d => d.accept()); await page.getByRole('button',{name:'Finalize puzzle',exact:true}).click();
   await expect(page.locator('#play-screen')).toBeVisible();
@@ -49,7 +49,7 @@ test('Make a puzzle shows settings and immediate preview, restores removed piece
 
 test('adventure loop: private preparation, export, two discoveries, tray rollback, player placement and solution', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/'); await page.locator('#open-setup').click();
+  await page.goto('/'); await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();
   await page.locator('#draft-size').selectOption('4');
   await page.getByText('More options', {exact:true}).click();
   await page.locator('#draft-seed').fill('m3-ui-adventure');
@@ -106,9 +106,9 @@ test('adventure loop: private preparation, export, two discoveries, tray rollbac
 });
 
 test('all 18 configurations publish readable boards; socket recovery preserves existing rotations', async ({ page }) => {
-  await page.goto('/'); await page.locator('#open-setup').click();
+  await page.goto('/'); await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();
   for (const size of [4, 5, 6]) for (const powers of [1, 2, 3]) for (const targets of [1, 2]) {
-    if (await page.locator('#open-setup').isVisible()) await page.locator('#open-setup').click();
+    if (await page.locator('#open-setup').isVisible()) {await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();}
     await page.locator('#draft-size').selectOption(String(size)); await page.locator('#draft-powers').selectOption(String(powers));
     await page.locator('#draft-targets').selectOption(String(targets)); await page.locator('#generate-draft').click();
     page.once('dialog', d => d.accept()); await page.locator('#publish-draft').click();
@@ -119,7 +119,7 @@ test('all 18 configurations publish readable boards; socket recovery preserves e
     expect(await page.locator('#board').evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
   await page.screenshot({ path: 'docs/evidence/m3-six-by-six.png', fullPage: true });
-  await page.locator('#open-setup').click();
+  await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();
   await page.locator('#draft-board button[aria-label^="Remove"]:enabled').first().click();
   page.once('dialog', d => d.accept()); await page.locator('#publish-draft').click();
   await page.locator('#free-play').check();
@@ -136,7 +136,7 @@ test('all 18 configurations publish readable boards; socket recovery preserves e
 
 test('private storage failure blocks publication without changing the active board', async ({ page }) => {
   await page.addInitScript(() => { Storage.prototype.setItem = () => { throw new Error('storage denied'); }; });
-  await page.goto('/'); await page.locator('#open-setup').click();
+  await page.goto('/'); await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();
   await page.locator('#generate-draft').click();
   await expect(page.locator('#draft-status')).toContainText('Private save unavailable');
   await page.locator('#publish-draft').click();
@@ -147,7 +147,7 @@ test('private storage failure blocks publication without changing the active boa
 });
 
 test('Randomize generates separate leaf goals instead of consecutive pass-through goals', async ({page}) => {
-  await page.goto('/');await page.locator('#open-setup').click();
+  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();
   await page.locator('#draft-size').selectOption('5');
   await page.locator('#draft-powers').selectOption('1');
   await page.locator('#draft-targets').selectOption('2');

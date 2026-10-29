@@ -4,7 +4,7 @@ for(const cube of [false,true])test(`two consecutive double-clicks rotate twice 
   await page.goto('/');
   let index=6;
   if(cube){
-    await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').uncheck();await page.locator('#publish-draft').click();
+    await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').uncheck();await page.locator('#publish-draft').click();
     index=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state.tiles.findIndex((tile:{terminal?:string}|null)=>tile&&!tile.terminal));
     await page.locator('#cube-square').selectOption(String(index));
   }
@@ -42,7 +42,7 @@ test('a failed first rotation cancels buffered rotations instead of retrying the
 for(const cube of [false,true])test(`Space outside board buttons ignores repeats and form controls: cube ${cube}`,async({page})=>{
   await page.goto('/');
   if(cube){
-    await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').check();await page.locator('#publish-draft').click();
+    await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').check();await page.locator('#publish-draft').click();
     const index=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state.tiles.findIndex((tile:{terminal?:string}|null)=>tile&&!tile.terminal));
     await page.locator('#cube-square').selectOption(String(index));
     const canvas=page.locator('#cube-board canvas'),box=(await canvas.boundingBox())!,local=index%9;
@@ -56,7 +56,7 @@ for(const cube of [false,true])test(`Space outside board buttons ignores repeats
   await expect(page.locator('#revision')).toHaveText('Revision 1');await expect(page.locator('#rotate')).toHaveAttribute('aria-busy','false');
   expect(await page.evaluate(()=>scrollY)).toBe(scroll);
   await page.locator('#viewer').focus();await page.keyboard.press('Space');await expect(page.locator('#revision')).toHaveText('Revision 1');await page.keyboard.press('Escape');
-  await page.locator('#open-setup').click();await page.getByText('More options',{exact:true}).click();
+  await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.getByText('More options',{exact:true}).click();
   await page.locator('#draft-seed').fill('hello');await page.locator('#draft-seed').press('End');await page.keyboard.press('Space');await expect(page.locator('#draft-seed')).toHaveValue('hello ');
 });
 

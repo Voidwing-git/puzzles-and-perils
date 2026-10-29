@@ -2,7 +2,7 @@ import {test,expect} from '@playwright/test';
 
 test('4x4x1 dais creates shallow sides and preserves geometry through edit/save',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
-  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('dais');await page.locator('#draft-free').check();
+  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#setup-kind').selectOption('dais');await page.locator('#draft-free').check();
   await expect(page.locator('#draft-cube canvas')).toBeVisible();
   await page.locator('#publish-draft').click();await expect(page.locator('#cube-board canvas')).toBeVisible();
   const state=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state);
@@ -22,7 +22,7 @@ for(const free of [false,true])test(`cube inspection preserves artwork and enabl
     const descriptor=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src')!;
     Object.defineProperty(HTMLImageElement.prototype,'src',{...descriptor,set(value:string){if(value.startsWith('data:image/svg+xml'))state.cubeImageLoads++;descriptor.set!.call(this,value);}});
   });
-  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('cube');
+  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#setup-kind').selectOption('cube');
   await page.locator('#draft-free').setChecked(free);await page.locator('#publish-draft').click();
   const indices=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state.tiles.flatMap((tile:{terminal?:string}|null,index:number)=>tile&&!tile.terminal?[index]:[]));
   await page.locator('#cube-square').selectOption(String(indices[0]));await expect(page.locator('#rotate')).toBeEnabled();
@@ -46,7 +46,7 @@ for(const reduced of [false,true])test(`cube double click rotates once and draws
     const rotate=CanvasRenderingContext2D.prototype.rotate;
     CanvasRenderingContext2D.prototype.rotate=function(angle:number){if(this.canvas.width===512&&this.canvas.height===512)observed.cubeAngles.push(angle);return rotate.call(this,angle);};
   });
-  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').check();await page.locator('#publish-draft').click();
+  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').check();await page.locator('#publish-draft').click();
   const index=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state.tiles.findIndex((tile:{shape:string;terminal?:string}|null)=>tile?.shape==='elbow'&&!tile.terminal));
   expect(index).toBeGreaterThanOrEqual(0);
   await page.locator('#cube-square').selectOption(String(index));
@@ -62,7 +62,7 @@ for(const reduced of [false,true])test(`cube double click rotates once and draws
 test('cube creator, orbit selection, authoritative rotation and missing-piece tray',async({page})=>{
   const errors:string[]=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto('/');
-  await page.getByRole('button',{name:'Make a puzzle',exact:true}).click();
+  await page.getByRole('button',{name:'Make a puzzle',exact:true}).click();await page.locator('#choose-pipes').click();
   await page.locator('#setup-kind').selectOption('cube');
   await expect(page.locator('#draft-cube canvas')).toBeVisible();
   await expect(page.locator('#draft-status')).toContainText('Settings saved privately');
@@ -111,7 +111,7 @@ test('cube creator, orbit selection, authoritative rotation and missing-piece tr
 test('touch orbit leaves puzzle state unchanged and explicit rotate works',async({browser})=>{
   const context=await browser.newContext({viewport:{width:900,height:1000},hasTouch:true,isMobile:true});
   try{
-    const page=await context.newPage();await page.goto('/');await page.locator('#open-setup').tap();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').check();await page.locator('#publish-draft').tap();
+    const page=await context.newPage();await page.goto('/');await page.locator('#open-setup').tap();await page.locator('#choose-pipes').click();await page.locator('#setup-kind').selectOption('cube');await page.locator('#draft-free').check();await page.locator('#publish-draft').tap();
     await expect(page.locator('#cube-board canvas')).toBeVisible();
     const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).state);
     const canvas=page.locator('#cube-board canvas');
@@ -131,7 +131,7 @@ test('touch orbit leaves puzzle state unchanged and explicit rotate works',async
 });
 
 test('disconnected cube faces block publication until a connecting face is enabled',async({page})=>{
-  await page.goto('/');await page.getByRole('button',{name:'Make a puzzle',exact:true}).click();
+  await page.goto('/');await page.getByRole('button',{name:'Make a puzzle',exact:true}).click();await page.locator('#choose-pipes').click();
   await page.locator('#setup-kind').selectOption('cube');
   await page.locator('#cube-face-settings input[value="top"]').check();
   await page.locator('#cube-face-settings input[value="bottom"]').check();

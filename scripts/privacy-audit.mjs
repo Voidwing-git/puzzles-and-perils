@@ -5,6 +5,21 @@ import {walk,allowedSource,allowedSite} from './publication-files.mjs';
 import {inspectZip} from './zip-store.mjs';
 import {createHash} from 'node:crypto';
 
+// Only the two reviewed gameplay previews may be binary. Reject ancillary PNG
+// chunks so text, locations, software labels and other metadata cannot ship.
+export function isPreview(file,data){
+  if(!/^(?:public\/)?previews\/(?:channels|lockpick)\.png$/.test(file)||data.length>1024*1024||data.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')return false;
+  let at=8,header=false,pixels=false;
+  while(at+12<=data.length){
+    const size=data.readUInt32BE(at),kind=data.subarray(at+4,at+8).toString('ascii');
+    if(at+size+12>data.length||!['IHDR','IDAT','IEND'].includes(kind))return false;
+    if(kind==='IHDR'){if(header||at!==8||size!==13)return false;header=true;const width=data.readUInt32BE(at+8),height=data.readUInt32BE(at+12);if(!width||!height||width>1600||height>1000)return false;}
+    if(kind==='IDAT')pixels=true;
+    at+=size+12;if(kind==='IEND')return header&&pixels&&size===0&&at===data.length;
+  }
+  return false;
+}
+
 // Report categories and locations only. Never echo matching secrets or context.
 export function inspectText(file,text){
   const rules=[
@@ -33,6 +48,7 @@ export function auditTree(root,mode){
   for(const file of files){
     if(!(mode==='source'?allowedSource(file):allowedSite(file)))findings.push({file,rule:'unexpected-publication-file',line:0});
     const data=fs.readFileSync(path.join(root,file));
+    if(isPreview(file,data))continue;
     if(data.includes(0))findings.push({file,rule:'unexpected-binary',line:0});
     else findings.push(...inspectText(file,data.toString('utf8')));
   }
@@ -58,6 +74,7 @@ export function auditArchives(root){
     if(JSON.stringify(entries.map(e=>e.name))!==JSON.stringify(archive.files))throw Error('Archive inventory differs.');
     for(const entry of entries){count++;const name=archive.archive+'/'+entry.name;
       if(!allow(entry.name)||entry.name.split('/').includes('..'))findings.push({file:name,rule:'unexpected-publication-file',line:0});
+      if(isPreview(entry.name,entry.data))continue;
       if(entry.data.includes(0))findings.push({file:name,rule:'unexpected-binary',line:0});
       else findings.push(...inspectText(entry.name,entry.data.toString('utf8')).map(hit=>({...hit,file:name})));
     }

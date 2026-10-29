@@ -24,7 +24,9 @@ export function parseRequest(value: unknown): Request | null {
   if (r.fixture !== undefined && !['relay', 'last-connection', 'dual-power'].includes(r.fixture)) return null;
   const c = r.command;
   if (!c || typeof c.puzzleId !== 'string' || !Number.isSafeInteger(c.expectedRevision) || c.expectedRevision < 0) return null;
-  if (c.type === 'rotate' || c.type === 'select' || c.type === 'place' || c.type === 'gm-rotate' || c.type === 'recall-piece') {
+  if(c.type==='pick-lock'){
+    if(!Number.isInteger(c.angle)||Math.abs(c.angle)>90||typeof c.strain!=='boolean')return null;
+  } else if (c.type === 'rotate' || c.type === 'select' || c.type === 'place' || c.type === 'gm-rotate' || c.type === 'recall-piece') {
     if (!Number.isInteger(c.tileIndex) || c.tileIndex < 0 || c.tileIndex >= 96) return null;
     if (c.type === 'place' && (typeof c.pieceId !== 'string' || !/^recovered-[\d-]{1,40}$/.test(c.pieceId))) return null;
   } else if (c.type === 'publish-draft'||c.type==='restore-draft') {
@@ -38,7 +40,7 @@ export function parseRequest(value: unknown): Request | null {
     if (!Array.isArray(c.playerIds) || c.playerIds.length > 32 || new Set(c.playerIds).size !== c.playerIds.length || c.playerIds.some(id=>typeof id!=='string'||!id.length||id.length>128)) return null;
   } else if (c.type === 'set-mode') {
     if (c.mode !== 'turns' && c.mode !== 'free') return null;
-  } else if (!['advance-turn', 'reset-puzzle', 'complete-puzzle', 'sync-players','undo','pause-puzzle','resume-puzzle'].includes(c.type)) return null;
+  } else if (!['advance-turn', 'reset-puzzle', 'complete-puzzle', 'sync-players','undo','pause-puzzle','resume-puzzle','give-lockpick'].includes(c.type)) return null;
   return r;
 }
 export function assertFits(metadata: Record<string, unknown>, shared: Shared) {

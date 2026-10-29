@@ -8,6 +8,7 @@ export function installPuzzleFit(matchTray: () => void) {
     scheduled = false;
     const play = document.getElementById('play-screen')!;
     if (play.hidden) return;
+    if(document.body.classList.contains('lock-game'))return;
     const panel = play.querySelector<HTMLElement>('.board-panel')!;
     const cube=document.getElementById('cube-board');
     const frame = cube&&!cube.hidden?cube:panel.querySelector<HTMLElement>('.board-frame')!;

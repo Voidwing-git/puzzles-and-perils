@@ -32,7 +32,7 @@ test('M4 undo, pause, backup review, reload and restore through real local contr
 });
 
 test('M4 private/public backup separation and restore retain missing pieces and their notes',async({page})=>{
-  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#draft-board button[aria-label^="Remove"]:enabled').first().click();
+  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#draft-board button[aria-label^="Remove"]:enabled').first().click();
   await page.locator('#draft-label').fill('M4 secret discovery');await page.locator('#draft-notes').fill('GM hidden notes');
   await page.locator('#draft-free').check();await page.locator('#publish-draft').click();
   await expect(page.locator('#piece-tray .unknown-piece')).toHaveCount(1);
@@ -57,7 +57,7 @@ test('M4 damaged local save fails closed and leaves import recovery available',a
 });
 
 test('M4 private backup restores hidden information in an independent browser profile',async({page,browser})=>{
-  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#draft-board button[aria-label^="Remove"]:enabled').first().click();
+  await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-pipes').click();await page.locator('#draft-board button[aria-label^="Remove"]:enabled').first().click();
   await page.locator('#draft-label').fill('Portable discovery');await page.locator('#draft-notes').fill('Portable GM notes');await page.locator('#publish-draft').click();
   await page.locator('#save-recovery>summary').click();const downloading=page.waitForEvent('download');await page.locator('#backup-private').click();const backup=await readFile((await(await downloading).path())!,'utf8');
   const original=await page.evaluate(()=>localStorage.getItem('arcane-pipes:private:m3:local:active'));

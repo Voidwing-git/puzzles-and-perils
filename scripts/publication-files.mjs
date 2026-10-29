@@ -5,12 +5,13 @@ export const rootFiles=['package.json','package-lock.json','tsconfig.json','vite
 export function allowedSource(file){
   if(rootFiles.includes(file))return true;
   if(file==='public/icon.svg'||file==='public/manifest.json')return true;
+  if(/^public\/previews\/(?:channels|lockpick)\.png$/.test(file))return true;
   if(/^src\/[A-Za-z0-9_./-]+\.(?:ts|css)$/.test(file))return true;
   if(/^tests\/[A-Za-z0-9_.-]+\.(?:ts|mjs)$/.test(file))return true;
   if(/^scripts\/[A-Za-z0-9_.-]+\.mjs$/.test(file))return true;
   return ['.github/workflows/verify.yml','.github/workflows/pages.yml'].includes(file);
 }
-export function allowedSite(file){return ['index.html','background.html','manifest.json','icon.svg','.nojekyll','THIRD_PARTY_NOTICES.txt','RELEASE-INVENTORY.json'].includes(file)||/^assets\/[A-Za-z0-9_-]+\.(?:js|css)$/.test(file);}
+export function allowedSite(file){return ['index.html','background.html','manifest.json','icon.svg','.nojekyll','THIRD_PARTY_NOTICES.txt','RELEASE-INVENTORY.json'].includes(file)||/^assets\/[A-Za-z0-9_-]+\.(?:js|css)$/.test(file)||/^previews\/(?:channels|lockpick)\.png$/.test(file);}
 export function walk(root,prefix=''){
   if(fs.lstatSync(root).isSymbolicLink()||!fs.lstatSync(root).isDirectory())throw new Error('Publication roots must be real directories.');
   const files=[];

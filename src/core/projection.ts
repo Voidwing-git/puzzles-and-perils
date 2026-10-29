@@ -8,6 +8,7 @@ export function projectPublic(preparation: PrivatePreparation): PublicPuzzle {
   const energy = traceEnergy(state);
   return {
     schemaVersion: 2,
+    ...(state.puzzleType==='lockpick'&&state.lockpick?{puzzleType:'lockpick' as const,lockpick:{difficulty:state.lockpick.difficulty,pickHealth:state.lockpick.pickHealth,brokenPicks:state.lockpick.brokenPicks,attempts:state.lockpick.attempts,angle:state.lockpick.angle,turn:state.lockpick.turn,opened:state.lockpick.opened,probeActor:state.lockpick.probeActor}}:{}),
     ...(state.paused?{paused:true}:{}),
     ...(state.cubeFaces?{cubeFaces:[...state.cubeFaces]}:{}),
     ...(state.cubeDimensions?{cubeDimensions:{width:state.cubeDimensions.width,depth:state.cubeDimensions.depth,height:state.cubeDimensions.height}}:{}),
@@ -28,7 +29,7 @@ export function projectPublic(preparation: PrivatePreparation): PublicPuzzle {
     ...(state.inventory ? { inventory: state.inventory.map(p => ({ id: p.id, tile: cloneTile(p.tile)! })) } : {}),
     revision: state.revision,
     ...energy,
-    connected: energy.solved,
-    solved: energy.solved && state.turnEdit === null,
+    connected: state.puzzleType==='lockpick'?!!state.lockpick?.opened:energy.solved,
+    solved: state.puzzleType==='lockpick'?!!state.lockpick?.opened:energy.solved && state.turnEdit === null,
   };
 }

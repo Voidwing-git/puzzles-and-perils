@@ -3,9 +3,21 @@ import {test} from 'node:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {inspectText} from '../scripts/privacy-audit.mjs';
+import {inspectText,isPreview} from '../scripts/privacy-audit.mjs';
 import {allowedSource,allowedSite} from '../scripts/publication-files.mjs';
 import {zipStore,inspectZip} from '../scripts/zip-store.mjs';
+
+test('only approved gameplay PNGs without metadata can be published',()=>{
+  for(const name of ['channels','lockpick']){
+    const file=`public/previews/${name}.png`,data=fs.readFileSync(file);
+    assert.ok(isPreview(file,data));assert.ok(isPreview(`previews/${name}.png`,data));
+    assert.equal(isPreview('public/previews/other.png',data),false);
+    assert.equal(isPreview(file,Buffer.concat([data,Buffer.from('extra')])),false);
+    const chunk=Buffer.alloc(16);chunk.writeUInt32BE(4);chunk.write('tEXt',4);chunk.write('note',8);
+    assert.equal(isPreview(file,Buffer.concat([data.subarray(0,33),chunk,data.subarray(33)])),false);
+    assert.equal(isPreview(file,data.subarray(0,data.length-1)),false);
+  }
+});
 
 test('publication allowlists exclude local configs, histories, evidence and source maps',()=>{
   for(const name of ['.env','.env.production','.git/config','docs/evidence/screen.png','profile/Cookies','src/local.json','assets/main.js.map','README.txt']){

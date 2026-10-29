@@ -61,6 +61,7 @@ test('SDK iframe route shares a board, enforces turns and survives action-window
   await expect(a.locator('#waiting-screen')).toBeVisible();
   await expect(a.locator('#play-screen')).toBeHidden();
   await expect(a.locator('#authoring')).toBeEmpty();
+  await gm.locator('#choose-pipes').click();
   await gm.locator('#setup-kind').selectOption('relay');
   await expect(gm.locator('#draft-free')).toBeChecked();
   await gm.locator('#draft-free').uncheck();

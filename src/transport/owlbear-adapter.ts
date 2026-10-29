@@ -65,7 +65,7 @@ export class OwlbearAdapter {
         puzzleId: this.#shared.puzzle.puzzleId, expectedRevision: this.#shared.puzzle.revision });
       if (!result.accepted) throw new Error('Puzzle finalization was rejected. Reopen the current puzzle before retrying.');
       if (result.snapshot.puzzleId !== preparation.state.puzzleId ||
-        JSON.stringify(result.snapshot.tiles) !== JSON.stringify(preparation.state.tiles))
+        JSON.stringify(result.snapshot.tiles) !== JSON.stringify(preparation.state.tiles)||result.snapshot.puzzleType!==preparation.state.puzzleType||JSON.stringify(result.snapshot.lockpick)!==JSON.stringify(preparation.state.lockpick))
         throw new Error('Saved board does not match these edits. Keep this window open and retry after reconnecting.');
       return result.snapshot;
     }
@@ -86,7 +86,7 @@ export class OwlbearAdapter {
     if (!this.#gm) return;
     if (id === '__gm__') this.#rehearsal = null;
     else {
-      this.#rehearsal ??= new PlayerRehearsal(this.snapshot(), this.fixtureId);
+      this.#rehearsal ??= new PlayerRehearsal(this.snapshot(), this.fixtureId,this.privatePreparation()??undefined);
       this.#previewActor = id;
     }
     this.#notify();

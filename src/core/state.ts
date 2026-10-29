@@ -9,7 +9,20 @@ export interface Tile {
   energy?: Energy;
 }
 export interface Participant { id: string; name: string }
+export type LockDifficulty = 'novice' | 'apprentice' | 'adept' | 'expert' | 'master';
+export interface LockState {
+  difficulty: LockDifficulty;
+  pickHealth: number;
+  brokenPicks: number;
+  attempts: number;
+  angle: number;
+  turn: number;
+  opened: boolean;
+  probeActor: string;
+}
 export interface PuzzleState {
+  puzzleType?: 'pipes' | 'lockpick';
+  lockpick?: LockState;
   cubeFaces?: import('./cube-topology.ts').CubeFace[];
   cubeDimensions?: import('./cube-topology.ts').PrismDimensions;
   paused?: boolean;
@@ -29,6 +42,7 @@ export interface PuzzleState {
   revision: number;
 }
 export interface PrivatePreparation {
+  lockSecret?: {sweetSpot:number};
   history?: string[];
   actionHistory?: {revision:number;action:string;actor:string;name?:string;at?:number;detail?:string}[];
   state: PuzzleState;
@@ -55,6 +69,8 @@ export interface PublicPuzzle extends PuzzleState {
 }
 export interface Actor { id: string; role: 'GM' | 'PLAYER'; name?:string }
 export type Command =
+  | {type:'pick-lock';angle:number;strain:boolean;puzzleId:string;expectedRevision:number}
+  | {type:'give-lockpick';puzzleId:string;expectedRevision:number}
   | {type:'undo'|'pause-puzzle'|'resume-puzzle';puzzleId:string;expectedRevision:number}
   | { type: 'gm-rotate' | 'recall-piece'; tileIndex: number; puzzleId: string; expectedRevision: number }
   | { type: 'publish-draft'; draftId: string; puzzleId: string; expectedRevision: number }

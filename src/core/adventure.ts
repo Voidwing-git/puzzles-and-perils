@@ -4,9 +4,11 @@ import type { CommandResult } from './commands.ts';
 import type { Actor, Command, Direction, Participant, PrivatePreparation } from './state.ts';
 import type { FixtureId } from './fixtures.ts';
 import {puzzleEvent} from './event-history.ts';
+import {applyLock} from './lockpick.ts';
 
 function transitionAdventure(preparation: PrivatePreparation, command: Command, actor: Actor, fixture: FixtureId = 'relay', roster?: Participant[]): { result: CommandResult; preparation: PrivatePreparation } {
   const state = preparation.state;
+  const lockResult=applyLock(preparation,command,actor);if(lockResult)return lockResult;
   const reject = (reason: 'wrong-puzzle' | 'stale-revision' | 'gm-only' | 'invalid-tile') => ({ result: { accepted: false as const, state, reason }, preparation });
   if (command.type === 'gm-rotate' || command.type === 'recall-piece') {
     if (command.puzzleId !== state.puzzleId) return reject('wrong-puzzle');

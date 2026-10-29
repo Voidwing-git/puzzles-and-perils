@@ -419,3 +419,57 @@ body { min-width: 0; }
 #cube-face-settings label {display:flex;align-items:center;gap:5px;margin:0;}
 #cube-face-settings input {width:auto;}
 .setup-preview .cube-viewport {height:min(65dvh,640px);}
+
+/* New-puzzle entry: one visual choice before any puzzle-specific settings. */
+.puzzle-picker {max-width:1040px;margin:3vh auto;padding:20px;}
+.puzzle-picker h1 {font-size:36px;margin:8px 0;}
+.puzzle-picker>p {color:#abbcc5;}
+.puzzle-type-cards {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;margin-top:28px;}
+.puzzle-type-card {padding:0;overflow:hidden;text-align:left;border:1px solid #53616b;border-radius:12px;background:#19232d;color:#e1e8e6;cursor:pointer;transition:border-color .18s,transform .18s,box-shadow .18s;}
+.puzzle-type-card:hover,.puzzle-type-card:focus-visible {border-color:#c9ad72;box-shadow:0 0 22px #b9985825;transform:translateY(-3px);}
+.puzzle-type-card img {display:block;width:100%;aspect-ratio:4/3;object-fit:cover;background:#101820;border-bottom:1px solid #53616b;}
+.puzzle-card-copy {padding:22px;display:grid;gap:10px;}
+.puzzle-card-copy strong {font:600 25px Georgia,serif;color:#ead9b4;}
+.puzzle-card-copy span {font-size:14px;line-height:1.5;}
+.puzzle-card-copy small {color:#9dafb8;font-size:12px;}
+.puzzle-types-back {margin-bottom:12px;}
+.lock-difficulties {border:0;padding:0;margin:16px 0;}
+.lock-difficulties legend {margin-bottom:10px;}
+.lock-difficulties label {display:flex;align-items:center;gap:10px;padding:11px;border:1px solid #46525b;border-radius:5px;margin:7px 0;cursor:pointer;}
+.lock-difficulties label:has(input:checked) {border-color:#c3a66a;background:#c3a66a18;}
+.lock-difficulties input {width:auto;margin:0;accent-color:#b8d9d0;}
+.lock-difficulties strong {margin-left:auto;font-size:12px;color:#d4bc84;white-space:nowrap;}
+.lock-game .game-table {grid-template-columns:180px minmax(0,1fr);max-width:1060px;margin:auto;}
+.lock-game .board-panel {width:100%;max-width:860px;--board-fit-width:100%;}
+.lock-game .inventory-panel,.lock-game .selection-panel,.lock-game #goal-status-panel,.lock-game .board-frame,.lock-game .board-footer,.lock-game .puzzle-description,.lock-game #gm-rotate,.lock-game #recall-piece,.lock-game #place-piece {display:none!important;}
+.lock-game .board-heading {margin-bottom:4px;}
+.lock-game .completion-slot {min-height:30px;}
+.lock-game-panel {padding:10px 20px 18px;border:1px solid #43535e;border-radius:12px;background:radial-gradient(ellipse at 50% 38%,#28373d,#111b23 66%);}
+.lock-heading {display:flex;align-items:center;justify-content:space-between;gap:16px;}
+.lock-heading h2 {font-size:22px;}
+.lock-difficulty,#lock-preview-difficulty {color:#e1c994;border:1px solid #7b6b4d;padding:7px 12px;border-radius:5px;font-size:13px;white-space:nowrap;}
+.lock-surface {width:100%;aspect-ratio:640/520;max-height:56dvh;min-height:240px;display:flex;align-items:center;justify-content:center;touch-action:none;cursor:grab;outline-offset:3px;}
+.lock-art {height:100%;max-width:100%;overflow:visible;filter:drop-shadow(0 10px 14px #0008);}
+.lock-cylinder,.lock-pick {transform-origin:320px 260px;}
+.lock-cylinder {transform:rotate(var(--lock-turn,0deg));transition:transform .4s cubic-bezier(.2,.7,.3,1);}
+.lock-pick {transform:rotate(var(--pick-angle,0deg));transition:opacity .2s;}
+.lock-inputs {display:grid;grid-template-columns:minmax(0,1fr) 150px;align-items:end;gap:26px;max-width:530px;margin:0 auto;}
+.lock-inputs label {font-size:12px;color:#a7bac4;}
+.lock-inputs input {display:block;width:100%;accent-color:#c0a269;padding:0;}
+.lock-inputs button {margin:0;touch-action:none;user-select:none;}
+.lock-help {color:#a7bac4;text-align:center;font-size:12px;line-height:1.6;margin:14px 0;}
+.lock-condition {display:flex;align-items:center;justify-content:center;gap:20px;min-height:40px;}
+.lock-condition label {display:flex;align-items:center;gap:12px;font-size:12px;margin:0;}
+.lock-condition meter {width:140px;height:12px;accent-color:#aacfc2;}
+.lock-condition button {width:auto;margin:0;}
+.lock-status {text-align:center;color:#d3b77b;font-size:13px;min-height:20px;margin:8px 0 0;}
+.is-binding .lock-pick {animation:lock-bind .1s linear infinite alternate;}
+.is-binding .lock-strain-ring {stroke:#e5a45b;filter:drop-shadow(0 0 6px #e5a45b88);}
+.pick-broken .lock-pick {opacity:.25;transform:translate(20px,40px) rotate(35deg);}
+.lock-open .lock-strain-ring {stroke:#a4f5ce;filter:drop-shadow(0 0 14px #a4f5ce88);}
+.lock-open .lock-pick {opacity:0;}
+.lock-preview {border:1px solid #45555e;border-radius:12px;padding:18px;background:#14212a;}
+.lock-preview .lock-surface {max-height:62dvh;}
+@keyframes lock-bind {from{transform:rotate(calc(var(--pick-angle,0deg) - 1deg));}to{transform:rotate(calc(var(--pick-angle,0deg) + 1deg));}}
+@media(max-width:700px){.puzzle-type-cards{grid-template-columns:1fr;gap:16px;}.puzzle-picker{padding:10px;}.lock-game .game-table{grid-template-columns:minmax(0,1fr);}.lock-game-panel{padding:12px;}.lock-inputs{grid-template-columns:minmax(0,1fr) 125px;gap:14px;}.lock-condition{flex-wrap:wrap;gap:8px;}.lock-surface{min-height:190px;}.lock-heading{gap:8px;}.puzzle-card-copy{padding:16px;}}
+@media(prefers-reduced-motion:reduce){.is-binding .lock-pick{animation:none;}.lock-cylinder,.puzzle-type-card{transition:none;}}
