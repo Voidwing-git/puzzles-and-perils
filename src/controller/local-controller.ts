@@ -24,7 +24,8 @@ export class LocalController {
   privatePreparation() { return structuredClone(this.#preparation); }
   publish(preparation: PrivatePreparation) {
     const next = structuredClone(preparation);
-    next.startingState = structuredClone(preparation.state);
+    if(next.state.puzzleType!=='challenge')next.startingState = structuredClone(preparation.state);
+    else {validatePreparation(next);next.startingState!.puzzleId=next.state.puzzleId;}
     next.startingWithheld = structuredClone(preparation.withheld);
     next.history=[];
     next.actionHistory=[...(next.actionHistory??[]).slice(-31),puzzleEvent(next,{type:'publish-draft',draftId:next.state.puzzleId,puzzleId:next.state.puzzleId,expectedRevision:next.state.revision},{id:'demo-host',role:'GM',name:'GM'},next.state.revision)];

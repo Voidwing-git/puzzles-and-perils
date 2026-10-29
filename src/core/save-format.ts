@@ -1,4 +1,6 @@
 import type {PrivatePreparation,PuzzleState,Tile} from './state.ts';
+import {validateChallenge,validateChallengeSecret} from './challenges.ts';
+import {validRingSymbols,effectiveRingSymbols} from './ring-door.ts';
 import {connectedFaces,faceSize} from './cube-topology.ts';
 import {traceEnergy} from './connectivity.ts';
 import {projectPublic} from './projection.ts';
@@ -21,9 +23,9 @@ function tile(value:unknown):Tile|null {
 }
 function state(value:unknown):PuzzleState {
   const s=object(value);if(s.schemaVersion!==2)fail();
-  if(s.puzzleType!==undefined&&s.puzzleType!=='pipes'&&s.puzzleType!=='lockpick'&&s.puzzleType!=='ring-door')fail();
-  const isLock=s.puzzleType==='lockpick',isRing=s.puzzleType==='ring-door',mechanical=isLock||isRing;
-  if((!isLock&&s.lockpick!==undefined)||(!isRing&&s.ringDoor!==undefined))fail();
+  if(s.puzzleType!==undefined&&s.puzzleType!=='pipes'&&s.puzzleType!=='lockpick'&&s.puzzleType!=='ring-door'&&s.puzzleType!=='challenge')fail();
+  const isLock=s.puzzleType==='lockpick',isRing=s.puzzleType==='ring-door',isChallenge=s.puzzleType==='challenge',mechanical=isLock||isRing||isChallenge;
+  if((!isChallenge&&s.challenge!==undefined)||(!isLock&&s.lockpick!==undefined)||(!isRing&&s.ringDoor!==undefined))fail();
   const width=integer(s.width,mechanical?0:3,mechanical?0:6),height=integer(s.height,mechanical?0:1,mechanical?0:36);
   const result:PuzzleState={schemaVersion:2,puzzleId:text(s.puzzleId),title:text(s.title),width,height,tiles:array(s.tiles).map(tile),participants:array(s.participants,32).map(value=>{const p=object(value);return{id:text(p.id),name:text(p.name)};}),activeIndex:0,mode:'turns',turnEdit:null,revision:integer(s.revision,0,Number.MAX_SAFE_INTEGER-100)};
   if(!result.puzzleId||!result.participants.length||result.participants.some(p=>!p.id)||new Set(result.participants.map(p=>p.id)).size!==result.participants.length)fail();
@@ -32,10 +34,11 @@ function state(value:unknown):PuzzleState {
   if(s.paused!==undefined){if(typeof s.paused!=='boolean')fail();result.paused=s.paused;}
   if(s.rosterCustomized!==undefined){if(typeof s.rosterCustomized!=='boolean')fail();result.rosterCustomized=s.rosterCustomized;}
   if(mechanical&&(result.tiles.length||s.turnEdit!==null||s.cubeFaces!==undefined||s.cubeDimensions!==undefined||s.inventory!==undefined||s.placements!==undefined))fail();
-  if(isRing){
+  if(isChallenge){result.puzzleType='challenge';result.challenge=validateChallenge(s.challenge);}
+  else if(isRing){
     const r=object(s.ringDoor),positions=array(r.positions,3).map(p=>integer(p,0,2));
     if(positions.length!==3||typeof r.opened!=='boolean')fail();
-    result.puzzleType='ring-door';result.ringDoor={positions:positions as [number,number,number],opened:r.opened,moves:integer(r.moves,0,Number.MAX_SAFE_INTEGER-100)};
+    result.puzzleType='ring-door';result.ringDoor={...(r.symbols!==undefined?{symbols:validRingSymbols(r.symbols)?[...r.symbols]:fail()}:{}),positions:positions as [number,number,number],opened:r.opened,moves:integer(r.moves,0,Number.MAX_SAFE_INTEGER-100)};
   }else if(isLock){
     if(result.tiles.length||s.turnEdit!==null||s.cubeFaces!==undefined||s.cubeDimensions!==undefined||s.inventory!==undefined||s.placements!==undefined)fail();
     const l=object(s.lockpick),difficulty=text(l.difficulty) as keyof typeof lockDifficulties;
@@ -65,10 +68,14 @@ function state(value:unknown):PuzzleState {
 }
 export function validatePreparation(value:unknown,checkpoint=false):PrivatePreparation {
   const p=object(value),s=state(p.state),solution=array(p.solution).map(tile);
-  if(solution.length!==s.tiles.length||(!['lockpick','ring-door'].includes(s.puzzleType??'pipes')&&!traceEnergy({...s,tiles:solution}).solved))fail();
+  if(solution.length!==s.tiles.length||(!['lockpick','ring-door','challenge'].includes(s.puzzleType??'pipes')&&!traceEnergy({...s,tiles:solution}).solved))fail();
   if(solution.some((t,i)=>(t?.terminal||s.tiles[i]?.terminal)&&JSON.stringify(t)!==JSON.stringify(s.tiles[i])))fail();
   const origin=(value:unknown)=>{const p=object(value),t=tile(p.tile);if(!t||t.terminal)fail();return{...(p.id!==undefined?{id:text(p.id,80)}:{}),index:integer(p.index,0,s.tiles.length-1),tile:t!,discoveryLabel:text(p.discoveryLabel,120),...(p.notes!==undefined?{notes:text(p.notes,2000)}:{})};};
   const result:PrivatePreparation={state:s,solution,seed:text(p.seed,100),withheld:array(p.withheld).map(origin)};
+  if(s.puzzleType==='challenge'){
+    result.challengeSecret=validateChallengeSecret(s.challenge!,p.challengeSecret);
+    if(result.withheld.length||result.seed!==''||p.hiddenInventory!==undefined||p.trayOrigins!==undefined||p.recoveryDestinations!==undefined)fail();
+  }else if(p.challengeSecret!==undefined)fail();
   if(s.puzzleType==='ring-door'){
     const targets=array(object(p.ringSecret).targets,3).map(v=>integer(v,0,2));if(targets.length!==3)fail();
     result.ringSecret={targets:targets as [number,number,number]};
@@ -82,6 +89,12 @@ export function validatePreparation(value:unknown,checkpoint=false):PrivatePrepa
   if(new Set(result.withheld.map(p=>p.index)).size!==result.withheld.length||result.withheld.some(p=>s.tiles[p.index]))fail();
   if(p.recoveryMode!==undefined){if(p.recoveryMode!=='tray'&&p.recoveryMode!=='socket')fail();result.recoveryMode=p.recoveryMode;}
   if(p.startingState!==undefined){result.startingState=state(p.startingState);if(result.startingState.puzzleId!==s.puzzleId||result.startingState.puzzleType!==s.puzzleType||result.startingState.lockpick?.difficulty!==s.lockpick?.difficulty||result.startingState.tiles.length!==s.tiles.length||JSON.stringify(result.startingState.cubeFaces)!==JSON.stringify(s.cubeFaces)||JSON.stringify(result.startingState.cubeDimensions)!==JSON.stringify(s.cubeDimensions))fail();}
+  if(s.ringDoor&&result.startingState?.ringDoor&&JSON.stringify(effectiveRingSymbols(s.ringDoor))!==JSON.stringify(effectiveRingSymbols(result.startingState.ringDoor)))fail();
+  if(s.challenge){
+    const start=result.startingState?.challenge;if(!start||start.kind!==s.challenge.kind||start.total!==s.challenge.total||start.stage!==0||start.opened||start.failed)fail();
+    const initial=result.challengeSecret!.answers[1];validateChallengeSecret(start!,{answers:[initial,initial]});
+    if(s.challenge.stage===0&&(['words','target',...(s.challenge.kind==='terminal'?[]:['pieces'])] as ('words'|'target'|'pieces')[]).some(key=>JSON.stringify(start![key])!==JSON.stringify(s.challenge![key])))fail();
+  }
   if(p.startingWithheld!==undefined)result.startingWithheld=array(p.startingWithheld).map(origin);
   if(p.hiddenInventory!==undefined)result.hiddenInventory=array(p.hiddenInventory).map(value=>{const p=object(value),t=tile(p.tile);if(!t||t.terminal)fail();return{id:recoveredId(p.id),tile:t!,...(p.origin!==undefined?{origin:origin(p.origin)}:{})};});
   const pieceIds=[...(s.inventory??[]).map(p=>p.id),...(s.placements??[]).map(p=>p.id),...(result.hiddenInventory??[]).map(p=>p.id)];if(new Set(pieceIds).size!==pieceIds.length)fail();
@@ -89,6 +102,10 @@ export function validatePreparation(value:unknown,checkpoint=false):PrivatePrepa
   if(p.recoveryDestinations!==undefined){result.recoveryDestinations={};for(const [key,value]of Object.entries(object(p.recoveryDestinations))){const index=integer(Number(key),0,s.tiles.length-1);if(String(index)!==key||(value!=='tray'&&value!=='socket'))fail();result.recoveryDestinations[index]=value;}}
   if(!checkpoint&&p.history!==undefined){result.history=array(p.history,12).map(value=>{const encoded=text(value,512*1024);const previous=validatePreparation(JSON.parse(encoded),true);if(previous.state.puzzleId!==s.puzzleId||previous.state.puzzleType!==s.puzzleType||previous.state.lockpick?.difficulty!==s.lockpick?.difficulty||previous.state.tiles.length!==s.tiles.length||JSON.stringify(previous.state.cubeFaces)!==JSON.stringify(s.cubeFaces)||JSON.stringify(previous.state.cubeDimensions)!==JSON.stringify(s.cubeDimensions))fail();return JSON.stringify(previous);});if(new TextEncoder().encode(JSON.stringify(result.history)).length>512*1024)fail();}
   if(!checkpoint&&p.actionHistory!==undefined)result.actionHistory=array(p.actionHistory,32).map(value=>{const a=object(value);return{revision:integer(a.revision,0,Number.MAX_SAFE_INTEGER),action:text(a.action,40),actor:text(a.actor),...(a.name!==undefined?{name:text(a.name,128)}:{}),...(a.at!==undefined?{at:integer(a.at,0,Number.MAX_SAFE_INTEGER)}:{}),...(a.detail!==undefined?{detail:text(a.detail,240)}:{})};});
+  for(const encoded of result.history??[]){const previous=JSON.parse(encoded) as PrivatePreparation;
+    if(s.ringDoor&&previous.state.ringDoor&&JSON.stringify(effectiveRingSymbols(s.ringDoor))!==JSON.stringify(effectiveRingSymbols(previous.state.ringDoor)))fail();
+    if(s.challenge&&(previous.state.challenge?.kind!==s.challenge.kind||previous.state.challenge?.total!==s.challenge.total))fail();
+  }
   return result;
 }
 const canonical=(value:unknown):string=>JSON.stringify(value,(_key,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b))):value);

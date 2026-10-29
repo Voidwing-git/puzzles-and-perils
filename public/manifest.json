@@ -1,6 +1,6 @@
 {
   "name": "Puzzles & Perils",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "manifest_version": 1,
   "description": "Runic channels, lock picking and rotating ring doors with shared play and private GM controls.",
   "icon": "/icon.svg",

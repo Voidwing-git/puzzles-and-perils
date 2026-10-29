@@ -51,3 +51,26 @@ test('ring opening respects reduced motion and reset returns to the starting com
   await page.locator('#reset-puzzle').click();await expect(page.locator('#ring-door-game')).not.toHaveClass(/ring-door-open/);
   await expect.poll(()=>positions(page)).toEqual(start);
 });
+
+test('randomize changes carvings and the private combination, and preserves them on publish and reopen',async({page})=>{
+  await makeDoor(page);await page.locator('#edit-puzzle').click();
+  const options=()=>page.locator('#ring-target-0 option').allTextContents();
+  const chosen=()=>page.locator('.ring-secret-controls select').evaluateAll(selects=>selects.map(select=>(select as HTMLSelectElement).selectedOptions[0].textContent));
+  const beforeSymbols=await options(),beforeCombination=await chosen();
+  await page.locator('#shuffle-rings').click();
+  const afterSymbols=await options(),afterCombination=await chosen();expect(afterSymbols.every(symbol=>beforeSymbols.includes(symbol))).toBe(false);expect(afterCombination).not.toEqual(beforeCombination);
+  const glyphs=await page.locator('.ring-door-preview .door-ring[data-ring="0"] .ring-animal').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-symbol')));
+  expect(new Set(glyphs).size).toBe(3);
+  await page.screenshot({path:'docs/evidence/ring-door-variety-creator.png',fullPage:true});
+  await page.locator('#publish-ring-door').click();await expect(page.locator('#ring-door-game')).toBeVisible();
+  await expect.poll(()=>page.locator('#ring-door-game .door-ring[data-ring="0"] .ring-animal').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-symbol')))).toEqual(glyphs);
+  await page.reload();await page.locator('#edit-puzzle').click();expect(await options()).toEqual(afterSymbols);expect(await chosen()).toEqual(afterCombination);
+});
+
+test('a legacy ring save without symbol metadata still renders Bear, Moth and Owl',async({page})=>{
+  await makeDoor(page);
+  await page.evaluate(()=>{const key='arcane-pipes:private:m3:local:active',saved=JSON.parse(localStorage.getItem(key)!);delete saved.state.ringDoor.symbols;delete saved.startingState.ringDoor.symbols;localStorage.setItem(key,JSON.stringify(saved));});
+  await page.reload();await expect(page.locator('#ring-door-game')).toBeVisible();
+  await expect.poll(()=>page.locator('#ring-door-game .door-ring[data-ring="0"] .ring-animal').evaluateAll(nodes=>nodes.map(node=>node.getAttribute('data-symbol')))).toEqual(['0','1','2']);
+  await page.locator('#edit-puzzle').click();expect(await page.locator('#ring-target-0 option').allTextContents()).toEqual(['Bear','Moth','Owl']);
+});

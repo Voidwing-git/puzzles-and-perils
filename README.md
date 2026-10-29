@@ -2,7 +2,8 @@
 
 Shared puzzles for Owlbear Rodeo. Start with a visual puzzle picker: runic
 channels (flat boards, connected cube faces and a 4 x 4 x 1 dais), lock picking,
-or a rotating ring door.
+rotating ring doors, word terminals, spectral analysis, wave harmonics and
+seven styles of hacking console.
 Includes GM authoring, turns/free play, private backups, undo and pause/resume.
 Local demonstration names are fictional.
 
@@ -21,10 +22,37 @@ Pick health is visible only in GM view; players use the turning, binding and
 breakage feedback. Visual tension responds immediately while successful opening
 and pick damage still require the controller's confirmation.
 
-Ring doors have three concentric Bear/Moth/Owl rings. Click a ring or its button
+Ring doors have three concentric rings using three of nine original symbols:
+Bear, Moth, Owl, Wolf, Serpent, Stag, Fox, Raven and Dragon. Randomize changes
+the symbol set, opening combination and starting positions together. Old doors
+retain their original symbols. Click a ring or its button
 to rotate it; matching the GM's private combination opens the stone door with
 an animation. Set the combination in the builder and provide any clue elsewhere
 in your adventure. This version does not create or require a puzzle-key item.
+
+The puzzle picker includes actual gameplay screenshots for every type:
+
+- **Word terminal:** twelve five-letter candidates, positional likeness,
+  four attempts, and single-use bracket tools. A lockout waits for the GM.
+- **Spectral analysis:** combine three additive/subtractive fragments to match
+  absorption lines. The GM chooses 1–6 samples for completion.
+- **Wave harmonics:** drag the wavelength and amplitude dials (or use their
+  sliders/arrow keys) to match the dashed target. The GM chooses 1–5 signals.
+- **Hex circuits:** rotate seven hex tiles; right click reverses rotation.
+- **Timing pins:** a rotating sweep sets/releases pins and reverses direction.
+- **Glyph cipher:** match three pairs of original glyphs to the visible clues.
+- **Mirror console:** aim a reflected pointer at illuminated nodes.
+- **Orbit lock:** catch dots on three rotating rings, holding through long arcs.
+- **Symbol stream:** hold and release the capture control over required glyphs.
+- **Data worm:** steer around obstacles and collect all five runes; Space boosts.
+
+These are original tabletop adaptations inspired by familiar game mechanics,
+not exact replicas. Timing consoles start explicitly, stop on focus loss, and
+use five mistakes instead of a countdown. Failed attempts wait for the GM's
+**Allow another attempt** control. Turn order, free play, undo, pause, solve,
+reset and private backups also work with these puzzles. Animation clocks and
+hit timing run locally; controller validation enforces room identity, turns,
+revision and completion rules, not competitive anti-cheat timing.
 
 New puzzles default to free play: any connected room member can rotate, place
 and recall pieces without being in the turn order. The default roster follows
@@ -34,7 +62,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.10.0 is a hosted-testing candidate. Live multi-device/table
+Version 0.11.0 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

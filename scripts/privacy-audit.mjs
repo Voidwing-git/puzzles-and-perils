@@ -8,7 +8,7 @@ import {createHash} from 'node:crypto';
 // Only the reviewed gameplay previews may be binary. Reject ancillary PNG
 // chunks so text, locations, software labels and other metadata cannot ship.
 export function isPreview(file,data){
-  if(!/^(?:public\/)?previews\/(?:channels|lockpick|ring-door)\.png$/.test(file)||data.length>1024*1024||data.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')return false;
+  if(!/^(?:public\/)?previews\/(?:channels|lockpick|ring-door|terminal|spectrum|waveform|hex|rotor|glyph|mirror|orbit|sequence|worm)\.png$/.test(file)||data.length>1024*1024||data.subarray(0,8).toString('hex')!=='89504e470d0a1a0a')return false;
   let at=8,header=false,pixels=false;
   while(at+12<=data.length){
     const size=data.readUInt32BE(at),kind=data.subarray(at+4,at+8).toString('ascii');

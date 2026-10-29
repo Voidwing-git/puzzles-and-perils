@@ -73,7 +73,7 @@ export class SharedController {
         draft.state.activeIndex=restoring?Math.max(0,draft.state.participants.findIndex(p=>p.id===activePlayer)):Math.min(draft.state.activeIndex,draft.state.participants.length-1);
         draft.state.puzzleId = request.command.draftId;
         if(restoring){draft.startingState??=structuredClone(draft.state);draft.startingState.puzzleId=draft.state.puzzleId;draft.startingWithheld??=structuredClone(draft.withheld);}
-        else {draft.startingState = structuredClone(draft.state);draft.startingWithheld = structuredClone(draft.withheld);draft.history=[];}
+        else {if(draft.state.puzzleType!=='challenge')draft.startingState = structuredClone(draft.state);else validatePreparation(draft);draft.startingWithheld = structuredClone(draft.withheld);draft.history=[];}
         draft.actionHistory=[...(draft.actionHistory??[]).slice(-31),puzzleEvent(draft,request.command,actor,draft.state.revision,restoring?'Restored a private backup':shared?'Updated the puzzle':'Created the puzzle')];
         pendingPrivate = draft;
         shared = { version: 1, owner: this.connection, generation: crypto.randomUUID(), puzzle: projectPublic(draft),

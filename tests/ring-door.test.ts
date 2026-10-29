@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createRingDoor,ringSymbols,validRingPositions} from '../src/core/ring-door.ts';
+import {createRingDoor,randomizeRingDoor,effectiveRingSymbols,ringSymbols,validRingPositions,validRingSymbols} from '../src/core/ring-door.ts';
+import {ringSymbolArt} from '../src/ui/ring-door-art.ts';
 import {applyAdventure} from '../src/core/adventure.ts';
 import {projectPublic} from '../src/core/projection.ts';
 import {encodePrivateSave,decodePrivateSave,encodePublicSave,validatePreparation} from '../src/core/save-format.ts';
@@ -13,8 +14,9 @@ function move(p:PrivatePreparation,command:{type:'rotate-ring';ring:number}|{typ
   return applyAdventure(p,{...command,puzzleId:p.state.puzzleId,expectedRevision:p.state.revision} as Command,actor);
 }
 
-test('three original symbols and fresh doors always start unsolved',()=>{
-  assert.deepEqual(ringSymbols,['Bear','Moth','Owl']);
+test('original symbol pool retains three positions and fresh doors always start unsolved',()=>{
+  assert.deepEqual(ringSymbols.slice(0,3),['Bear','Moth','Owl']);assert.equal(ringSymbols.length,9);
+  assert.equal(new Set(ringSymbols.map((_,i)=>ringSymbolArt(i))).size,9);
   for(let i=0;i<40;i++){
     const p=createRingDoor('door');assert.equal(projectPublic(p).solved,false);
     assert.ok(validRingPositions(p.state.ringDoor!.positions));assert.ok(validRingPositions(p.ringSecret!.targets));
@@ -54,13 +56,34 @@ test('ring private saves, undo, reset and solve preserve targets without public 
   const restored=decodePrivateSave(encodePrivateSave(p));assert.deepEqual(restored.ringSecret!.targets,[0,1,2]);
   assert.ok(!encodePublicSave(p).includes('ringSecret'));assert.ok(!encodePublicSave(p).includes('actionHistory'));
   const polluted=structuredClone(p);Object.assign(polluted.state.ringDoor!,{targets:[0,1,2],gmNote:'private-note'});
-  assert.deepEqual(Object.keys(projectPublic(polluted).ringDoor!).sort(),['moves','opened','positions']);
+  assert.deepEqual(Object.keys(projectPublic(polluted).ringDoor!).sort(),['moves','opened','positions','symbols']);
   assert.equal(JSON.stringify(projectPublic(polluted)).includes('private-note'),false);
   const undone=move(restored,{type:'undo'},gm).preparation;assert.deepEqual(undone.state.ringDoor!.positions,[2,0,1]);
   const solved=move(restored,{type:'complete-puzzle'},gm).preparation;assert.deepEqual(solved.state.ringDoor!.positions,[0,1,2]);assert.equal(solved.state.ringDoor!.opened,true);
   const reset=move(solved,{type:'reset-puzzle'},gm).preparation;assert.deepEqual(reset.state.ringDoor!.positions,[2,0,1]);assert.equal(reset.state.ringDoor!.opened,false);
   assert.throws(()=>validatePreparation({...p,ringSecret:{targets:[0,1,3]}}));
   assert.throws(()=>validatePreparation({...p,state:{...p.state,ringDoor:{...p.state.ringDoor!,opened:true}}}));
+});
+
+test('randomize changes the symbol set and visible opening combination together',()=>{
+  let previous=createRingDoor('old',[0,1,2],[2,0,1]);
+  for(let i=0;i<40;i++){
+    const next=randomizeRingDoor('door-'+i,previous),before=effectiveRingSymbols(previous.state.ringDoor!),after=effectiveRingSymbols(next.state.ringDoor!);
+    assert.ok(validRingSymbols(after));assert.equal(after.every(symbol=>before.includes(symbol)),false);
+    assert.notDeepEqual(next.ringSecret!.targets.map(slot=>after[slot]),previous.ringSecret!.targets.map(slot=>before[slot]));
+    assert.notDeepEqual(next.state.ringDoor!.positions,next.ringSecret!.targets);assert.equal(next.state.ringDoor!.opened,false);
+    assert.deepEqual(decodePrivateSave(encodePrivateSave(next)).state.ringDoor!.symbols,after);
+    assert.deepEqual(projectPublic(next).ringDoor!.symbols,after);previous=next;
+  }
+  for(const value of [[0,0,2],[0,1,9],[0,1],[-1,1,2],['1',2,3]])assert.equal(validRingSymbols(value),false);
+  const malformed=createRingDoor('bad');malformed.state.ringDoor!.symbols=[0,0,2];assert.throws(()=>validatePreparation(malformed));
+});
+
+test('legacy three-symbol doors retain their meanings through restore, movement and edit-ready copies',()=>{
+  const p=createRingDoor('old',[0,1,2],[2,0,1]);delete p.state.ringDoor!.symbols;delete p.startingState!.ringDoor!.symbols;
+  const restored=decodePrivateSave(encodePrivateSave(p));assert.deepEqual(effectiveRingSymbols(restored.state.ringDoor!),[0,1,2]);
+  const after=move(restored,{type:'rotate-ring',ring:0}).preparation;
+  assert.deepEqual(after.state.ringDoor!.positions,[0,0,1]);assert.deepEqual(effectiveRingSymbols(after.state.ringDoor!),[0,1,2]);
 });
 
 test('ring rehearsal opens a detached copy without changing the shared source',()=>{

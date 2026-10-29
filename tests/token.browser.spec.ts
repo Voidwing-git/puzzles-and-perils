@@ -515,5 +515,25 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(player.locator('#ring-door-game')).toHaveClass(/ring-door-open/);await expect(gm.locator('#success')).toBeVisible();await expect(gm.locator('#success-title')).toHaveText('The door opens');
   const ringPublic=await page.locator('#state').innerText();expect(ringPublic).not.toContain('ringSecret');
   await page.locator('#gm-window').screenshot({path:'docs/evidence/ring-door-shared-gm.png'});
+  // Each console uses the same authenticated shared request path. Private
+  // answers remain only in the GM store, including after partial progress.
+  for(const kind of ['terminal','spectrum','waveform','hex','rotor','glyph','mirror','orbit','sequence','worm']){
+    await gm.locator('#open-setup').click();await gm.locator('#choose-'+kind).click();
+    await gm.locator('#publish-challenge').click();await expect(player.locator('#challenge-game')).toBeVisible();
+    await expect(player.locator('#challenge-draft-status')).toHaveCount(0);
+    const readPublic=async()=>(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle;
+    const before=await readPublic();
+    if(['terminal','spectrum','hex','glyph'].includes(kind))await player.locator('#challenge-game [data-choice="0"]').click();
+    else if(kind==='waveform'){await player.locator('[data-dial="0"]').fill('30');await player.locator('[data-dial="0"]').dispatchEvent('change');}
+    else if(kind==='mirror'){const box=(await player.locator('#challenge-game svg').boundingBox())!;await page.mouse.click(box.x+box.width*.25,box.y+box.height*.5);}
+    else if(kind==='worm')await player.locator('#challenge-game [data-direction="1"]').click();
+    else{await player.locator('#challenge-game [data-start]').click();const hit=player.locator('#challenge-game [data-hit]');await hit.focus();await page.keyboard.down('Space');if(kind!=='rotor')await page.waitForTimeout(150);await page.keyboard.up('Space');}
+    await expect.poll(async()=>(await readPublic()).revision).toBeGreaterThan(before.revision);
+    const visible=await page.locator('#state').innerText();expect(visible).not.toContain('challengeSecret');expect(visible).not.toContain('answers');
+    await gm.locator('#complete-puzzle').click();await expect(player.locator('#success')).toBeVisible();
+    await gm.locator('#edit-puzzle').click();await gm.locator('#publish-challenge').click();await expect(player.locator('#success')).toBeVisible();
+    await page.locator('#player-window').evaluate((frame:HTMLIFrameElement)=>{frame.src=frame.src;});await expect(player.locator('#success')).toBeVisible();
+    await gm.locator('#reset-puzzle').click();await expect(player.locator('#success')).toBeHidden();
+  }
   expect(errors).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import {ringNames,ringSymbols,RING_STEPS} from '../core/ring-door.ts';
+import {ringNames,ringSymbols,RING_STEPS,effectiveRingSymbols} from '../core/ring-door.ts';
 import type {PublicPuzzle} from '../core/state.ts';
 import {ringDoorArt} from './ring-door-art.ts';
 import './ring-door.css';
@@ -8,7 +8,8 @@ export function mountRingDoorView(root:HTMLElement,request:(ring:number)=>Promis
   root.innerHTML=`<div class="ring-door-surface">${ringDoorArt(true)}</div>
     <div class="ring-door-controls">${ringNames.map((name,i)=>`<button type="button" class="secondary-button" data-ring-button="${i}"><strong>${name} ring</strong><span class="ring-door-symbol"></span></button>`).join('')}</div>
     <p class="ring-door-help">Click a ring to turn it. Align the three symbols at the top.</p><p class="ring-door-status" role="status" aria-live="polite"></p>`;
-  const rings=Array.from(root.querySelectorAll<SVGGElement>('.door-ring'));
+  const surface=root.querySelector<HTMLElement>('.ring-door-surface')!;
+  let rings=Array.from(root.querySelectorAll<SVGGElement>('.door-ring')),symbolKey='';
   const buttons=Array.from(root.querySelectorAll<HTMLButtonElement>('[data-ring-button]'));
   const status=root.querySelector<HTMLElement>('.ring-door-status')!;
   let enabled=false,busy=false,pending=false,disposed=false,puzzleId='',lastRevision=-1;
@@ -25,7 +26,7 @@ export function mountRingDoorView(root:HTMLElement,request:(ring:number)=>Promis
     try{await request(ring);}finally{pending=false;if(!disposed)draw();}
   }
   for(const button of buttons)button.onclick=()=>{void rotate(Number(button.dataset.ringButton));};
-  root.querySelector('.ring-door-surface')!.addEventListener('click',event=>{
+  surface.addEventListener('click',event=>{
     const hit=(event.target as Element).closest('[data-ring-hit]');if(hit)void rotate(Number(hit.getAttribute('data-ring-hit')));
   });
   return{
@@ -33,14 +34,16 @@ export function mountRingDoorView(root:HTMLElement,request:(ring:number)=>Promis
       root.hidden=next.puzzleType!=='ring-door';
       const door=next.ringDoor;if(root.hidden||!door){enabled=false;draw();return;}
       enabled=canPlay&&!next.paused&&!door.opened;busy=externalBusy;
-      const fresh=next.puzzleId!==puzzleId;
+      const symbols=effectiveRingSymbols(door),nextSymbolKey=symbols.join(',');
+      const fresh=next.puzzleId!==puzzleId||nextSymbolKey!==symbolKey;
+      if(nextSymbolKey!==symbolKey){surface.innerHTML=ringDoorArt(true,symbols);rings=Array.from(surface.querySelectorAll<SVGGElement>('.door-ring'));symbolKey=nextSymbolKey;}
       if(fresh){puzzleId=next.puzzleId;lastRevision=-1;positions=[...door.positions];angles=positions.map(position=>position*360/RING_STEPS);message='';root.classList.toggle('ring-restored-open',door.opened);}
       if(next.revision!==lastRevision){
         for(const [i,ring]of rings.entries()){
           if(!fresh)angles[i]+=((door.positions[i]-positions[i]+RING_STEPS)%RING_STEPS)*360/RING_STEPS;
           if(fresh)ring.style.transition='none';
           ring.style.setProperty('--ring-angle',angles[i]+'deg');
-          const symbol=ringSymbols[door.positions[i]];
+          const symbol=ringSymbols[symbols[door.positions[i]]];
           buttons[i].querySelector('.ring-door-symbol')!.textContent=symbol;
           buttons[i].setAttribute('aria-label',`Rotate ${ringNames[i].toLowerCase()} ring (${symbol})`);
           if(fresh){const frame=requestAnimationFrame(()=>{frames.delete(frame);if(!disposed)ring.style.removeProperty('transition');});frames.add(frame);}

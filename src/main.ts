@@ -6,6 +6,7 @@ import { installPuzzleFit } from './ui/viewport-fit.ts';
 import { closePieceMenu, openPieceMenu, updatePieceMenu } from './ui/piece-menu.ts';
 import { mountPuzzleCreator } from './ui/puzzle-creator.ts';
 import {mountLockView} from './ui/lock-view.ts';
+import {mountChallengeView} from './ui/challenge-view.ts';
 import {mountRingDoorView} from './ui/ring-door-view.ts';
 import { rejectionMessages } from './core/commands.ts';
 import { fixtureOptions } from './core/fixtures.ts';
@@ -215,6 +216,15 @@ const ringView=mountRingDoorView(ringHost,async ring=>{
   }catch(error){ringView.report(error instanceof Error?error.message:'The ring could not be moved.');return false;}
   finally{queuedActions--;render();}
 });
+const challengeHost=document.createElement('section');challengeHost.id='challenge-game';challengeHost.className='challenge-panel';challengeHost.hidden=true;boardPanel.append(challengeHost);
+const challengeView=mountChallengeView(challengeHost,async action=>{
+  const retry=action.op==='retry';
+  if(queuedActions||publishing||adapter.pending||snapshot.puzzleType!=='challenge'||(!retry&&!canUseMechanism())||(retry&&adapter instanceof OwlbearAdapter&&(!adapter.gm||adapter.preview)))return false;
+  queuedActions++;render();
+  try{const result=await adapter.request({type:'challenge-action',action,puzzleId:snapshot.puzzleId,expectedRevision:snapshot.revision},retry);await displaySnapshot(result.snapshot);if(!result.accepted)challengeView.report(rejectionMessages[result.reason]);return result.accepted;}
+  catch(error){challengeView.report(error instanceof Error?error.message:'The action could not complete.');return false;}
+  finally{queuedActions--;render();}
+});
 let lastTouch = { index: -1, time: -Infinity };
 let lastTap: { index: number; time: number } | null = null;
 let touchStart: { index: number; pointer: number; x: number; y: number; time: number } | null = null;
@@ -300,6 +310,7 @@ function canRotate(): boolean {
 }
 
 function render() {
+  const isChallenge=snapshot.puzzleType==='challenge';document.body.classList.toggle('challenge-game',isChallenge);
   const isLock=snapshot.puzzleType==='lockpick',isRing=snapshot.puzzleType==='ring-door';document.body.classList.toggle('lock-game',isLock);document.body.classList.toggle('ring-game',isRing);
   if (board.children.length !== snapshot.tiles.length) { selected = null; focusIndex = 0; createBoard(); }
   board.style.gridTemplateColumns = `repeat(${Math.max(1,snapshot.width)}, minmax(0, 1fr))`;
@@ -340,8 +351,8 @@ function render() {
   element('revision').textContent = `Revision ${snapshot.revision}`;
   element('success').hidden = !snapshot.connected;
   element('success').dataset.solved=String(snapshot.solved);
-  element('success-title').textContent = isRing?'The door opens':isLock?'The lock opens':snapshot.solved ? 'The runes are awakened' : 'Both runes are connected';
-  element('success-detail').textContent = isRing?'The rings align and the passage opens.':isLock?'The mechanism yields.':snapshot.solved ? 'Every target is connected. The chamber opens.' : 'End the turn to confirm. You can still adjust your chosen piece.';
+  element('success-title').textContent = isChallenge?'The mechanism responds':isRing?'The door opens':isLock?'The lock opens':snapshot.solved ? 'The runes are awakened' : 'Both runes are connected';
+  element('success-detail').textContent = isChallenge?'The challenge is complete.':isRing?'The rings align and the passage opens.':isLock?'The mechanism yields.':snapshot.solved ? 'Every target is connected. The chamber opens.' : 'End the turn to confirm. You can still adjust your chosen piece.';
   updateCompletionEffect(element('success'),snapshot.puzzleId,snapshot.solved);
   element('turn-hint').textContent = snapshot.paused?'':snapshot.solved ? 'All runes are powered. Moves are locked.' :
     adapter.viewer === 'spectator' ? 'You are observing. Select a tile to inspect it.' :
@@ -359,7 +370,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.10.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.11.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
@@ -399,8 +410,9 @@ function render() {
   rotate.setAttribute('aria-busy', String(queuedActions > 0));
   lockView.update(snapshot,canPickLock()||(isLock&&queuedActions>0&&adapter.pending),!(adapter instanceof OwlbearAdapter)||(adapter.gm&&!adapter.preview),queuedActions>0||adapter.pending);
   lockHost.setAttribute('aria-busy',String(queuedActions>0||adapter.pending));
+  challengeView.update(snapshot,isChallenge&&canUseMechanism(),!(adapter instanceof OwlbearAdapter)||(adapter.gm&&!adapter.preview),queuedActions>0||adapter.pending);
   ringView.update(snapshot,isRing&&canUseMechanism(),queuedActions>0||adapter.pending);ringHost.setAttribute('aria-busy',String(queuedActions>0||adapter.pending));
-  if(!(adapter instanceof OwlbearAdapter)){element('shared-admin').hidden=!(isLock||isRing);fixture.hidden=isLock||isRing;(fixture.previousElementSibling as HTMLElement).hidden=isLock||isRing;loadBoard.hidden=isLock||isRing;}
+  if(!(adapter instanceof OwlbearAdapter)){element('shared-admin').hidden=!(isLock||isRing||isChallenge);fixture.hidden=isLock||isRing||isChallenge;(fixture.previousElementSibling as HTMLElement).hidden=isLock||isRing||isChallenge;loadBoard.hidden=isLock||isRing||isChallenge;}
   fitPuzzle();
 }
 

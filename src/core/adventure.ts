@@ -6,9 +6,11 @@ import type { FixtureId } from './fixtures.ts';
 import {puzzleEvent} from './event-history.ts';
 import {applyLock} from './lockpick.ts';
 import {applyRingDoor} from './ring-door.ts';
+import {applyChallenge} from './challenges.ts';
 
 function transitionAdventure(preparation: PrivatePreparation, command: Command, actor: Actor, fixture: FixtureId = 'relay', roster?: Participant[]): { result: CommandResult; preparation: PrivatePreparation } {
   const state = preparation.state;
+  const challengeResult=applyChallenge(preparation,command,actor);if(challengeResult)return challengeResult;
   const lockResult=applyLock(preparation,command,actor);if(lockResult)return lockResult;
   const ringResult=applyRingDoor(preparation,command,actor);if(ringResult)return ringResult;
   const reject = (reason: 'wrong-puzzle' | 'stale-revision' | 'gm-only' | 'invalid-tile') => ({ result: { accepted: false as const, state, reason }, preparation });

@@ -3,7 +3,7 @@ import { applyAdmin } from './admin.ts';
 import type { Actor, Command, Direction, PuzzleState, Participant } from './state.ts';
 
 export type Rejection = 'wrong-puzzle' | 'stale-revision' | 'unknown-player' | 'wrong-turn' |
-  'invalid-tile' | 'empty-socket' | 'fixed-terminal' | 'solved' | 'gm-only' | 'free-mode' | 'invalid-roster' | 'paused' | 'no-history' | 'needs-lockpick' | 'invalid-lock-action' | 'invalid-ring-action';
+  'invalid-tile' | 'empty-socket' | 'fixed-terminal' | 'solved' | 'gm-only' | 'free-mode' | 'invalid-roster' | 'paused' | 'no-history' | 'needs-lockpick' | 'invalid-lock-action' | 'invalid-ring-action' | 'invalid-challenge-action' | 'challenge-failed';
 export type CommandResult = { accepted: true; state: PuzzleState } |
   { accepted: false; state: PuzzleState; reason: Rejection };
 
@@ -28,7 +28,7 @@ export function applyCommand(state: PuzzleState, command: Command, actor: Actor,
       if (state.participants[state.activeIndex].id !== actor.id) return reject('wrong-turn');
     }
     if (state.mode === 'free') return reject('free-mode');
-    if (state.lockpick?.opened || state.ringDoor?.opened || (traceEnergy(state).solved && state.turnEdit === null)) return reject('solved');
+    if (state.challenge?.opened || state.lockpick?.opened || state.ringDoor?.opened || (traceEnergy(state).solved && state.turnEdit === null)) return reject('solved');
     return { accepted: true, state: { ...state, activeIndex: (state.activeIndex + 1) % state.participants.length,
       turnEdit: null, revision: state.revision + 1 } };
   }
@@ -102,6 +102,8 @@ export function rollbackPreview(state: PuzzleState): PuzzleState {
 export const rejectionMessages: Record<Rejection, string> = {
   'needs-lockpick':'The pick broke. Wait for the GM to give another pick.',
   'invalid-lock-action':'That action is not available for this lock.',
+  'invalid-challenge-action':'That control is not available for this puzzle.',
+  'challenge-failed':'The attempt ended. Wait for the GM to reset the console.',
   'invalid-ring-action':'That ring cannot be moved right now.',
   paused:'The GM has paused this puzzle.',
   'no-history':'No earlier action is available to undo.',

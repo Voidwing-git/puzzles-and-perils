@@ -4,7 +4,7 @@ async function lockPage(page:import('@playwright/test').Page){
   await page.goto('/');await page.locator('#open-setup').click();
   await expect(page.getByRole('heading',{name:'Choose a puzzle'})).toBeVisible();
   await expect(page.locator('#draft-size')).toHaveCount(0);
-  await expect(page.locator('.puzzle-type-card img')).toHaveCount(3);
+  await expect(page.locator('.puzzle-type-card img')).toHaveCount(13);
   await expect.poll(()=>page.locator('.puzzle-type-card img').evaluateAll(images=>images.every(image=>(image as HTMLImageElement).complete&&(image as HTMLImageElement).naturalWidth>0))).toBe(true);
   await page.locator('#choose-lockpick').click();
   for(const label of ['Novice','Apprentice','Adept','Expert','Master'])await expect(page.locator('.lock-difficulties')).toContainText(label);

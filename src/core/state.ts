@@ -23,9 +23,10 @@ export interface LockState {
   binding?: boolean;
   travelLimit?: number;
 }
-export interface RingDoorState {positions:[number,number,number];opened:boolean;moves:number}
+export interface RingDoorState {positions:[number,number,number];symbols?:[number,number,number];opened:boolean;moves:number}
 export interface PuzzleState {
-  puzzleType?: 'pipes' | 'lockpick' | 'ring-door';
+  puzzleType?: 'pipes' | 'lockpick' | 'ring-door' | 'challenge';
+  challenge?: import('./challenges.ts').ChallengeState;
   lockpick?: LockState;
   ringDoor?: RingDoorState;
   cubeFaces?: import('./cube-topology.ts').CubeFace[];
@@ -47,6 +48,7 @@ export interface PuzzleState {
   revision: number;
 }
 export interface PrivatePreparation {
+  challengeSecret?: {answers:number[][]};
   lockSecret?: {sweetSpot:number};
   ringSecret?: {targets:[number,number,number]};
   history?: string[];
@@ -75,6 +77,7 @@ export interface PublicPuzzle extends PuzzleState {
 }
 export interface Actor { id: string; role: 'GM' | 'PLAYER'; name?:string }
 export type Command =
+  | {type:'challenge-action';action:import('./challenges.ts').ChallengeAction;puzzleId:string;expectedRevision:number}
   | {type:'rotate-ring';ring:0|1|2;puzzleId:string;expectedRevision:number}
   | {type:'pick-lock';angle:number;strain:boolean;puzzleId:string;expectedRevision:number}
   | {type:'give-lockpick';puzzleId:string;expectedRevision:number}
