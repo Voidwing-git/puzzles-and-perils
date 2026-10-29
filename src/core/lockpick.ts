@@ -2,14 +2,16 @@ import type {Actor,Command,LockDifficulty,LockState,PrivatePreparation} from './
 import type {CommandResult,Rejection} from './commands.ts';
 
 export const lockDifficulties = {
-  novice:{name:'Novice',dc:5,tolerance:18},
-  apprentice:{name:'Apprentice',dc:10,tolerance:12},
-  adept:{name:'Adept',dc:15,tolerance:8},
-  expert:{name:'Expert',dc:20,tolerance:4},
-  master:{name:'Master',dc:25,tolerance:2},
+  novice:{name:'Novice',dc:5,tolerance:18,damage:5},
+  apprentice:{name:'Apprentice',dc:10,tolerance:12,damage:8},
+  adept:{name:'Adept',dc:15,tolerance:8,damage:12},
+  expert:{name:'Expert',dc:20,tolerance:4,damage:20},
+  master:{name:'Master',dc:25,tolerance:2,damage:25},
 } as const;
+export const LOCK_TICK_MS=250;
+export const LOCK_OPEN_MS=1750;
 export function freshLock(difficulty:LockDifficulty):LockState {
-  return{difficulty,pickHealth:100,brokenPicks:0,attempts:0,angle:0,turn:0,opened:false,probeActor:''};
+  return{difficulty,pickHealth:100,brokenPicks:0,attempts:0,angle:0,turn:0,opened:false,probeActor:'',tensionMs:0,binding:false};
 }
 export function createLock(difficulty:LockDifficulty,puzzleId:string,sweetSpot?:number):PrivatePreparation {
   const angle=sweetSpot??(crypto.getRandomValues(new Uint32Array(1))[0]%151-75);
@@ -44,14 +46,20 @@ export function applyLock(preparation:PrivatePreparation,command:Command,actor:A
   if(command.type==='give-lockpick'&&(lock.pickHealth!==0||lock.opened))return reject('invalid-lock-action');
   const next=structuredClone(preparation),value=next.state.lockpick!;
   if(command.type==='reset-puzzle')next.state.lockpick=freshLock(lock.difficulty);
-  else if(command.type==='complete-puzzle'){value.opened=true;value.turn=90;value.probeActor='';}
-  else if(command.type==='give-lockpick'){value.pickHealth=100;value.angle=0;value.turn=0;value.probeActor='';}
+  else if(command.type==='complete-puzzle'){value.opened=true;value.turn=90;value.probeActor='';value.tensionMs=LOCK_OPEN_MS;value.binding=false;}
+  else if(command.type==='give-lockpick'){value.pickHealth=100;value.angle=0;value.turn=0;value.probeActor='';value.tensionMs=0;value.binding=false;}
   else if(command.type==='pick-lock'){
     value.angle=command.angle;value.probeActor=actor.id;
-    value.turn=lockTurn(command.angle,preparation.lockSecret.sweetSpot,value.difficulty);
+    // A new press always starts from rest; separate taps cannot accumulate an
+    // opening. Each continued hold step gives shared mechanical feedback.
+    value.tensionMs=command.strain?Math.min(LOCK_OPEN_MS,(value.tensionMs??0)+LOCK_TICK_MS):0;
+    const limit=lockTurn(command.angle,preparation.lockSecret.sweetSpot,value.difficulty);
+    const travel=Math.round(90*value.tensionMs/LOCK_OPEN_MS);
+    value.turn=Math.min(limit,travel);
+    value.binding=limit<90&&travel>=limit;
     if(!command.strain)value.attempts++;
     value.opened=value.turn===90;
-    if(command.strain&&!value.opened){value.pickHealth=Math.max(0,value.pickHealth-25);if(value.pickHealth===0){value.brokenPicks++;value.turn=0;value.probeActor='';}}
+    if(command.strain&&value.binding){value.pickHealth=Math.max(0,value.pickHealth-lockDifficulties[value.difficulty].damage);if(value.pickHealth===0){value.brokenPicks++;value.turn=0;value.probeActor='';value.tensionMs=0;value.binding=false;}}
   }
   next.state.revision++;
   return{result:{accepted:true,state:next.state},preparation:next};

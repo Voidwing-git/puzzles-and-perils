@@ -6,9 +6,13 @@ Includes GM authoring, turns/free play, private backups, undo and pause/resume.
 Local demonstration names are fictional.
 
 Lock picking offers Novice (DC 5), Apprentice (DC 10), Adept (DC 15), Expert
-(DC 20) and Master (DC 25). Drag the pick or use arrow keys to set its angle;
-hold Space or the Turn control, releasing when the cylinder binds. Higher tiers
-have narrower opening angles. DCs are table reference labels, not dice rolls.
+(DC 20) and Master (DC 25). Move the mouse over the lock to aim, then hold the
+left mouse button to turn. Arrow keys with Space and a separate Turn control
+are also available. Closer angles let the cylinder turn farther before binding.
+Release when it binds; a steady hold in the safe zone opens the lock. Higher
+tiers have narrower zones and less time before a binding pick breaks.
+The GM builder shows the exact angle, a shaded slice and a range bar; player
+views never receive that overlay. DCs are table reference labels, not dice rolls.
 Each lock starts with one pick. Sustained pressure at a bad angle breaks it;
 only the GM can give another pick. The opening angle remains in private GM
 storage and private backups. Artwork and preview screenshots are original.
@@ -21,7 +25,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.9.0 is a hosted-testing candidate. Live multi-device/table
+Version 0.9.1 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

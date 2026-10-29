@@ -8,7 +8,7 @@ export function projectPublic(preparation: PrivatePreparation): PublicPuzzle {
   const energy = traceEnergy(state);
   return {
     schemaVersion: 2,
-    ...(state.puzzleType==='lockpick'&&state.lockpick?{puzzleType:'lockpick' as const,lockpick:{difficulty:state.lockpick.difficulty,pickHealth:state.lockpick.pickHealth,brokenPicks:state.lockpick.brokenPicks,attempts:state.lockpick.attempts,angle:state.lockpick.angle,turn:state.lockpick.turn,opened:state.lockpick.opened,probeActor:state.lockpick.probeActor}}:{}),
+    ...(state.puzzleType==='lockpick'&&state.lockpick?{puzzleType:'lockpick' as const,lockpick:{difficulty:state.lockpick.difficulty,pickHealth:state.lockpick.pickHealth,brokenPicks:state.lockpick.brokenPicks,attempts:state.lockpick.attempts,angle:state.lockpick.angle,turn:state.lockpick.turn,opened:state.lockpick.opened,probeActor:state.lockpick.probeActor,tensionMs:state.lockpick.tensionMs??0,binding:state.lockpick.binding??false}}:{}),
     ...(state.paused?{paused:true}:{}),
     ...(state.cubeFaces?{cubeFaces:[...state.cubeFaces]}:{}),
     ...(state.cubeDimensions?{cubeDimensions:{width:state.cubeDimensions.width,depth:state.cubeDimensions.depth,height:state.cubeDimensions.height}}:{}),

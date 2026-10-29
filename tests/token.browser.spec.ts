@@ -496,8 +496,11 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect(player.locator('.lock-status')).toContainText('Waiting for the GM');
   await gm.locator('.lock-give').click();await expect(player.locator('.lock-angle')).toBeEnabled();
   await player.locator('.lock-angle').fill(String(opening));await player.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
-  await expect(player.locator('#success-title')).toHaveText('The lock opens');await page.keyboard.up('Space');
+  await expect(player.locator('#success')).toBeVisible();await expect(player.locator('#success-title')).toHaveText('The lock opens');await page.keyboard.up('Space');
+  await expect(player.locator('.lock-zone')).toHaveCount(0);await expect(player.locator('#lock-zone-bar')).toHaveCount(0);
   await expect(gm.locator('#success')).toBeVisible();
+  await gm.locator('#edit-puzzle').click();await expect(gm.locator('#lock-zone-bar')).toBeVisible();
+  await gm.locator('#publish-lock').click();await expect(gm.locator('#lock-game')).toBeVisible();await expect(player.locator('#success')).toBeVisible();
   const lockPublic=await page.locator('#state').innerText();for(const field of ['lockSecret','sweetSpot','tolerance'])expect(lockPublic).not.toContain(field);
   await page.locator('#gm-window').screenshot({path:'docs/evidence/lockpick-shared-gm.png'});
   expect(errors).toEqual([]);

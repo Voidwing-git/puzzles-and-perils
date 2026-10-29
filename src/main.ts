@@ -347,7 +347,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.9.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.9.1 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;

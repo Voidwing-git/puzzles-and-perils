@@ -19,6 +19,8 @@ export interface LockState {
   turn: number;
   opened: boolean;
   probeActor: string;
+  tensionMs?: number;
+  binding?: boolean;
 }
 export interface PuzzleState {
   puzzleType?: 'pipes' | 'lockpick';

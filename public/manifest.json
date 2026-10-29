@@ -1,6 +1,6 @@
 {
   "name": "Puzzles & Perils",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "manifest_version": 1,
   "description": "Runic channels and lock-picking puzzles with shared play and private GM controls.",
   "icon": "/icon.svg",

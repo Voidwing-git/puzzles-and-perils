@@ -2,7 +2,7 @@ import type {PrivatePreparation,PuzzleState,Tile} from './state.ts';
 import {connectedFaces,faceSize} from './cube-topology.ts';
 import {traceEnergy} from './connectivity.ts';
 import {projectPublic} from './projection.ts';
-import {lockDifficulties} from './lockpick.ts';
+import {lockDifficulties,LOCK_OPEN_MS,LOCK_TICK_MS} from './lockpick.ts';
 
 export const MAX_SAVE_BYTES=4*1024*1024;
 function fail():never{throw new Error('Invalid or unsupported puzzle save. The current puzzle was kept.');}
@@ -35,7 +35,10 @@ function state(value:unknown):PuzzleState {
     const l=object(s.lockpick),difficulty=text(l.difficulty) as keyof typeof lockDifficulties;
     if(!Object.hasOwn(lockDifficulties,difficulty)||typeof l.opened!=='boolean')fail();
     result.puzzleType='lockpick';result.lockpick={difficulty,pickHealth:integer(l.pickHealth,0,100),brokenPicks:integer(l.brokenPicks,0,1000000),attempts:integer(l.attempts,0,1000000),angle:integer(l.angle,-90,90),turn:integer(l.turn,0,90),opened:l.opened,probeActor:text(l.probeActor)};
-    if(result.lockpick.pickHealth%25!==0||l.opened!==(l.turn===90)||(l.pickHealth===0&&l.turn!==0&&!l.opened))fail();
+    result.lockpick.tensionMs=l.tensionMs===undefined?0:integer(l.tensionMs,0,LOCK_OPEN_MS);
+    if(result.lockpick.tensionMs%LOCK_TICK_MS!==0||(l.binding!==undefined&&typeof l.binding!=='boolean'))fail();
+    result.lockpick.binding=l.binding===true;
+    if(l.opened!==(l.turn===90)||(l.pickHealth===0&&l.turn!==0&&!l.opened)||(result.lockpick.binding&&(l.opened||l.pickHealth===0)))fail();
   }else if(s.lockpick!==undefined)fail();
   else if(s.cubeFaces!==undefined){
     const faces=array(s.cubeFaces,6).map(v=>text(v,10)) as NonNullable<PuzzleState['cubeFaces']>;

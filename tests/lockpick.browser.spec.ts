@@ -24,11 +24,57 @@ test('creator chooser, lock difficulty, break gate, GM replacement and opening w
   await page.screenshot({path:'docs/evidence/lockpick-broken.png',fullPage:true});
   await page.locator('.lock-give').click();await expect(slider).toBeEnabled();
   await slider.fill(String(angle));await page.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
-  await expect(page.locator('#success-title')).toHaveText('The lock opens');await page.keyboard.up('Space');
+  await expect(page.locator('#success')).toBeVisible();await expect(page.locator('#success-title')).toHaveText('The lock opens');await page.keyboard.up('Space');
   await expect(page.locator('#success')).toBeVisible();await expect(page.locator('#goal-status-panel')).toBeHidden();
   await expect(page.locator('.inventory-panel')).toBeHidden();
   await page.reload();await expect(page.locator('#success-title')).toHaveText('The lock opens');
   await page.locator('#edit-puzzle').click();await expect(page.locator('[name="lock-difficulty"][value="expert"]')).toBeChecked();
+});
+
+test('GM preview shows a matching private angle bar and slice across difficulty and randomization',async({page})=>{
+  await lockPage(page);await page.locator('#edit-puzzle').click();
+  const guide=page.locator('#lock-zone-bar');await expect(guide).toBeVisible();await expect(page.locator('.lock-zone')).toHaveCount(1);
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).lockSecret.sweetSpot as number);
+  await expect(guide).toHaveAttribute('aria-label',new RegExp(`Opening angle ${saved>0?'\\+':''}${saved}°`));
+  await expect.poll(()=>guide.evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--zone-width')))).toBeCloseTo(8/180*100,5);
+  await page.locator('[name="lock-difficulty"][value="novice"]').check();
+  const range=await guide.evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--zone-width')));expect(range).toBeGreaterThan(16);
+  await page.locator('#randomize-lock').click();
+  await page.screenshot({path:'docs/evidence/lockpick-zone-creator.png',fullPage:true});
+  await page.locator('#publish-lock').click();await expect(page.locator('#lock-game .lock-zone')).toHaveCount(0);
+  await expect(guide).toBeHidden();
+});
+
+test('mouse hover aims without clicking; short clicks reset and a sustained mouse hold opens the lock',async({page})=>{
+  await lockPage(page);
+  const surface=page.locator('#lock-game .lock-surface'),slider=page.locator('#lock-game .lock-angle'),box=(await surface.boundingBox())!;
+  const aim=async(angle:number)=>{const radians=angle*Math.PI/180,radius=Math.min(box.width,box.height)*.3;await page.mouse.move(box.x+box.width/2+Math.sin(radians)*radius,box.y+box.height/2-Math.cos(radians)*radius);};
+  await aim(40);await expect(slider).toHaveValue('40');await expect(page.locator('#revision')).toHaveText('Revision 0');
+  const angle=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).lockSecret.sweetSpot as number);
+  await aim(angle);await page.mouse.down();
+  await expect.poll(()=>page.locator('#lock-game').evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--lock-turn')))).toBeGreaterThan(0);
+  await expect(page.locator('#success')).toBeHidden();
+  // Captured pointer release outside the face must stop further tension.
+  await page.mouse.move(box.x-10,box.y-10);await page.mouse.up();
+  await expect(page.locator('#lock-game')).toHaveAttribute('aria-busy','false');
+  await expect.poll(()=>page.locator('#lock-game').evaluate(el=>(el as HTMLElement).style.getPropertyValue('--lock-turn'))).toBe('0deg');
+  const revision=await page.locator('#revision').innerText();await page.waitForTimeout(500);await expect(page.locator('#revision')).toHaveText(revision);
+  await aim(angle);const start=Date.now();await page.mouse.down();await expect(page.locator('#success')).toBeVisible({timeout:10000});await page.mouse.up();
+  expect(Date.now()-start).toBeGreaterThanOrEqual(1700);await expect(page.locator('.lock-condition meter')).toHaveAttribute('value','100');
+});
+
+test('binding gives more visible travel near the zone and releasing stops pick damage',async({page})=>{
+  await lockPage(page);
+  const angle=await page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!).lockSecret.sweetSpot as number);
+  const sample=async(value:number)=>{
+    await page.locator('.lock-angle').fill(String(value));await page.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
+    await expect(page.locator('#lock-game')).toHaveClass(/is-binding/);
+    const turn=await page.locator('#lock-game').evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--lock-turn')));
+    await page.keyboard.up('Space');await expect(page.locator('#lock-game')).toHaveAttribute('aria-busy','false');return turn;
+  };
+  const far=await sample(angle>0?-90:90),near=await sample(angle+(angle>0?-6:6));expect(near).toBeGreaterThan(far+50);
+  await expect(page.locator('#success')).toBeHidden();const health=await page.locator('.lock-condition meter').getAttribute('value');
+  await page.waitForTimeout(500);await expect(page.locator('.lock-condition meter')).toHaveAttribute('value',health!);
 });
 test('releasing torque early preserves the pick and spectator input cannot move a lock',async({page})=>{
   await lockPage(page);await page.locator('#lock-game .lock-angle').fill('-90');
