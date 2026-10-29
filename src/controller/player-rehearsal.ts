@@ -12,7 +12,7 @@ export class PlayerRehearsal {
   constructor(source: PublicPuzzle, privateFixture: FixtureId,preparation?:PrivatePreparation) {
     this.#puzzle = structuredClone(source);
     this.fixture = privateFixture;
-    if(source.puzzleType==='lockpick'&&preparation){this.#private=structuredClone(preparation);this.#private.state=structuredClone(source);}
+    if((source.puzzleType==='lockpick'||source.puzzleType==='ring-door')&&preparation){this.#private=structuredClone(preparation);this.#private.state=structuredClone(source);}
   }
   private fixture: FixtureId;
   snapshot() { return structuredClone(this.#puzzle); }

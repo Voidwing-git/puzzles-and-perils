@@ -1,8 +1,8 @@
 {
   "name": "Puzzles & Perils",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "manifest_version": 1,
-  "description": "Runic channels and lock-picking puzzles with shared play and private GM controls.",
+  "description": "Runic channels, lock picking and rotating ring doors with shared play and private GM controls.",
   "icon": "/icon.svg",
   "background_url": "/background.html"
 }

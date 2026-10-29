@@ -16,7 +16,7 @@ export function lockArt(zone?:{angle:number;tolerance:number}){const prefix=`loc
     <path d="M310 239a14 14 0 1 1 20 0l5 40h-30z" fill="#050b10" stroke="#a8915f" stroke-width="2"/>
     <path d="M322 267v86q0 16 16 16h74" fill="none" stroke="#0c1419" stroke-width="17" stroke-linejoin="round"/><path d="M322 267v86q0 16 16 16h74" fill="none" stroke="#8b9698" stroke-width="9" stroke-linejoin="round"/><path d="M322 269v80" stroke="#d1d8cf" stroke-width="2"/>
   </g>
-  <g class="lock-pick"><path d="M320 263v-91l-5-14V87q0-9 6-9t6 9v73l-4 12v91z" fill="url(#lock-pick-metal)" stroke="#24292b" stroke-width="1.5"/><path d="M319 86v67" stroke="#e3d5af" stroke-width="2"/><path d="m319 258 5-6" stroke="#ddd0a9" stroke-width="3"/></g>
+  <g class="lock-pick"><g class="lock-pick-handle"><path d="M320 174l-5-16V87q0-9 6-9t6 9v73l-4 14-1-3z" fill="url(#lock-pick-metal)" stroke="#24292b" stroke-width="1.5"/><path d="M319 86v67" stroke="#e3d5af" stroke-width="2"/></g><g class="lock-pick-tip"><path d="M320 263v-91l1-2 2 4v89z" fill="url(#lock-pick-metal)" stroke="#24292b" stroke-width="1.5"/><path d="m319 258 5-6" stroke="#ddd0a9" stroke-width="3"/></g></g>
   <path d="M187 71a235 235 0 0 1 266 0" fill="none" stroke="#607275" stroke-dasharray="1 14" stroke-width="3" opacity=".75"/>
 </svg>`.replaceAll('id="lock-',`id="${prefix}`).replaceAll('url(#lock-',`url(#${prefix}`);}
 

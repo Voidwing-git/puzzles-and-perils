@@ -8,7 +8,8 @@ export function projectPublic(preparation: PrivatePreparation): PublicPuzzle {
   const energy = traceEnergy(state);
   return {
     schemaVersion: 2,
-    ...(state.puzzleType==='lockpick'&&state.lockpick?{puzzleType:'lockpick' as const,lockpick:{difficulty:state.lockpick.difficulty,pickHealth:state.lockpick.pickHealth,brokenPicks:state.lockpick.brokenPicks,attempts:state.lockpick.attempts,angle:state.lockpick.angle,turn:state.lockpick.turn,opened:state.lockpick.opened,probeActor:state.lockpick.probeActor,tensionMs:state.lockpick.tensionMs??0,binding:state.lockpick.binding??false}}:{}),
+    ...(state.puzzleType==='ring-door'&&state.ringDoor?{puzzleType:'ring-door' as const,ringDoor:{positions:[...state.ringDoor.positions] as [number,number,number],opened:state.ringDoor.opened,moves:state.ringDoor.moves}}:{}),
+    ...(state.puzzleType==='lockpick'&&state.lockpick?{puzzleType:'lockpick' as const,lockpick:{difficulty:state.lockpick.difficulty,pickHealth:state.lockpick.pickHealth,brokenPicks:state.lockpick.brokenPicks,attempts:state.lockpick.attempts,angle:state.lockpick.angle,turn:state.lockpick.turn,opened:state.lockpick.opened,probeActor:state.lockpick.probeActor,tensionMs:state.lockpick.tensionMs??0,binding:state.lockpick.binding??false,...(state.lockpick.travelLimit!==undefined?{travelLimit:state.lockpick.travelLimit}:{})}}:{}),
     ...(state.paused?{paused:true}:{}),
     ...(state.cubeFaces?{cubeFaces:[...state.cubeFaces]}:{}),
     ...(state.cubeDimensions?{cubeDimensions:{width:state.cubeDimensions.width,depth:state.cubeDimensions.depth,height:state.cubeDimensions.height}}:{}),
@@ -29,7 +30,7 @@ export function projectPublic(preparation: PrivatePreparation): PublicPuzzle {
     ...(state.inventory ? { inventory: state.inventory.map(p => ({ id: p.id, tile: cloneTile(p.tile)! })) } : {}),
     revision: state.revision,
     ...energy,
-    connected: state.puzzleType==='lockpick'?!!state.lockpick?.opened:energy.solved,
-    solved: state.puzzleType==='lockpick'?!!state.lockpick?.opened:energy.solved && state.turnEdit === null,
+    connected: state.puzzleType==='ring-door'?!!state.ringDoor?.opened:state.puzzleType==='lockpick'?!!state.lockpick?.opened:energy.solved,
+    solved: state.puzzleType==='ring-door'?!!state.ringDoor?.opened:state.puzzleType==='lockpick'?!!state.lockpick?.opened:energy.solved && state.turnEdit === null,
   };
 }

@@ -1,0 +1,44 @@
+.ring-door-panel {max-width:860px;padding:12px 20px 18px;border:1px solid #43535e;border-radius:12px;background:radial-gradient(ellipse at 50% 40%,#2a3a3e,#111b23 70%);}
+.ring-door-surface {display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:720/660;max-height:66dvh;min-height:280px;}
+.ring-door-art {height:100%;max-width:100%;overflow:visible;filter:drop-shadow(0 12px 15px #0008);}
+.door-ring {transform-origin:360px 320px;transform:rotate(var(--ring-angle,0deg));transition:transform .36s cubic-bezier(.22,.75,.2,1);}
+.ring-animal {fill:#d1bb82;stroke:#151e22;stroke-width:1.4;stroke-linejoin:round;}
+.ring-glyph-cut {fill:none;stroke:#263334;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+.ring-hit {pointer-events:stroke;cursor:pointer;}
+.ring-hit:hover {stroke:#b8e8da18;}
+.ring-door-panel[data-disabled="true"] .ring-hit {pointer-events:none;cursor:default;}
+.ring-door-controls {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-width:610px;margin:0 auto;}
+.ring-door-controls button {display:grid;gap:4px;justify-items:center;margin:0;min-height:55px;}
+.ring-door-controls strong {font-size:14px;}
+.ring-door-controls span {color:#b5cbc7;font-size:12px;}
+.ring-door-help {text-align:center;color:#a8bbbF;font-size:12px;line-height:1.5;margin:13px 0 0;}
+.ring-door-status {text-align:center;color:#d4bd88;font-size:13px;min-height:18px;margin:8px 0 0;}
+.ring-door-leaf {transform:translateY(0);transform-origin:360px 320px;transition:transform 1.25s cubic-bezier(.55,.02,.8,.75) .4s;}
+.ring-door-seal {transform-origin:360px 320px;transition:transform .35s ease;}
+.ring-door-open .ring-door-leaf {transform:translateY(540px);}
+.ring-door-open .ring-door-seal {transform:rotate(90deg);}
+.ring-door-open .ring-seal-rune {fill:#b8ffe0;filter:drop-shadow(0 0 9px #a1ffdf);}
+.ring-door-open .ring-alignment-arrow {fill:#b8ffe0;filter:drop-shadow(0 0 7px #a1ffdf);}
+.ring-door-open .ring-door-light {animation:ring-door-reveal 1.4s ease-out both;}
+.ring-door-dust {opacity:0;}
+.ring-door-open .ring-door-dust {animation:ring-door-dust 1.3s ease-out .5s;}
+.ring-restored-open .ring-door-leaf,.ring-restored-open .ring-door-seal {transition:none;}
+.ring-restored-open .ring-door-light,.ring-restored-open .ring-door-dust {animation:none;}
+.ring-door-preview {padding:16px;border:1px solid #43535e;border-radius:12px;background:radial-gradient(ellipse at 50% 45%,#293a3d,#131e26 70%);}
+.ring-door-preview .ring-door-surface {max-height:64dvh;}
+.ring-secret-controls {border:0;margin:14px 0;padding:0;}
+.ring-secret-controls legend {margin-bottom:10px;font-weight:600;}
+.ring-secret-controls label {display:grid;grid-template-columns:1fr 1.2fr;gap:10px;align-items:center;margin:9px 0;}
+.ring-secret-controls select {min-width:0;}
+.ring-door-preview-heading {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.ring-door-preview-heading h2 {margin:0;}
+.ring-door-preview-note {font-size:12px;color:#a8bdb9;text-align:center;}
+.ring-game .game-table {grid-template-columns:180px minmax(0,1fr);max-width:1060px;margin:auto;}
+.ring-game .board-panel {width:100%;max-width:860px;--board-fit-width:100%;}
+.ring-game .inventory-panel,.ring-game .selection-panel,.ring-game #goal-status-panel,.ring-game .board-frame,.ring-game .board-footer,.ring-game .puzzle-description,.ring-game #gm-rotate,.ring-game #recall-piece,.ring-game #place-piece {display:none!important;}
+.ring-game .board-heading {margin-bottom:4px;}
+.ring-game .completion-slot {min-height:30px;}
+@keyframes ring-door-reveal {0%{opacity:.02;}45%{opacity:.17;}100%{opacity:.07;}}
+@keyframes ring-door-dust {0%{opacity:0;transform:translateY(-8px);}20%{opacity:.6;}100%{opacity:0;transform:translateY(15px);}}
+@media(max-width:700px){.ring-game .game-table{grid-template-columns:minmax(0,1fr);}.ring-door-panel{padding:10px;}.ring-door-surface{min-height:220px;}.ring-door-controls{gap:6px;}.ring-door-controls button{padding:8px 5px;}}
+@media(prefers-reduced-motion:reduce){.door-ring,.ring-door-leaf,.ring-door-seal{transition:none;}.ring-door-open .ring-door-light,.ring-door-open .ring-door-dust{animation:none;}}

@@ -21,16 +21,22 @@ function tile(value:unknown):Tile|null {
 }
 function state(value:unknown):PuzzleState {
   const s=object(value);if(s.schemaVersion!==2)fail();
-  if(s.puzzleType!==undefined&&s.puzzleType!=='pipes'&&s.puzzleType!=='lockpick')fail();
-  const isLock=s.puzzleType==='lockpick';
-  const width=integer(s.width,isLock?0:3,isLock?0:6),height=integer(s.height,isLock?0:1,isLock?0:36);
+  if(s.puzzleType!==undefined&&s.puzzleType!=='pipes'&&s.puzzleType!=='lockpick'&&s.puzzleType!=='ring-door')fail();
+  const isLock=s.puzzleType==='lockpick',isRing=s.puzzleType==='ring-door',mechanical=isLock||isRing;
+  if((!isLock&&s.lockpick!==undefined)||(!isRing&&s.ringDoor!==undefined))fail();
+  const width=integer(s.width,mechanical?0:3,mechanical?0:6),height=integer(s.height,mechanical?0:1,mechanical?0:36);
   const result:PuzzleState={schemaVersion:2,puzzleId:text(s.puzzleId),title:text(s.title),width,height,tiles:array(s.tiles).map(tile),participants:array(s.participants,32).map(value=>{const p=object(value);return{id:text(p.id),name:text(p.name)};}),activeIndex:0,mode:'turns',turnEdit:null,revision:integer(s.revision,0,Number.MAX_SAFE_INTEGER-100)};
   if(!result.puzzleId||!result.participants.length||result.participants.some(p=>!p.id)||new Set(result.participants.map(p=>p.id)).size!==result.participants.length)fail();
   result.activeIndex=integer(s.activeIndex,0,result.participants.length-1);
   if(s.mode!=='turns'&&s.mode!=='free')fail();result.mode=s.mode;
   if(s.paused!==undefined){if(typeof s.paused!=='boolean')fail();result.paused=s.paused;}
   if(s.rosterCustomized!==undefined){if(typeof s.rosterCustomized!=='boolean')fail();result.rosterCustomized=s.rosterCustomized;}
-  if(isLock){
+  if(mechanical&&(result.tiles.length||s.turnEdit!==null||s.cubeFaces!==undefined||s.cubeDimensions!==undefined||s.inventory!==undefined||s.placements!==undefined))fail();
+  if(isRing){
+    const r=object(s.ringDoor),positions=array(r.positions,3).map(p=>integer(p,0,2));
+    if(positions.length!==3||typeof r.opened!=='boolean')fail();
+    result.puzzleType='ring-door';result.ringDoor={positions:positions as [number,number,number],opened:r.opened,moves:integer(r.moves,0,Number.MAX_SAFE_INTEGER-100)};
+  }else if(isLock){
     if(result.tiles.length||s.turnEdit!==null||s.cubeFaces!==undefined||s.cubeDimensions!==undefined||s.inventory!==undefined||s.placements!==undefined)fail();
     const l=object(s.lockpick),difficulty=text(l.difficulty) as keyof typeof lockDifficulties;
     if(!Object.hasOwn(lockDifficulties,difficulty)||typeof l.opened!=='boolean')fail();
@@ -38,6 +44,7 @@ function state(value:unknown):PuzzleState {
     result.lockpick.tensionMs=l.tensionMs===undefined?0:integer(l.tensionMs,0,LOCK_OPEN_MS);
     if(result.lockpick.tensionMs%LOCK_TICK_MS!==0||(l.binding!==undefined&&typeof l.binding!=='boolean'))fail();
     result.lockpick.binding=l.binding===true;
+    if(l.travelLimit!==undefined)result.lockpick.travelLimit=integer(l.travelLimit,3,90);
     if(l.opened!==(l.turn===90)||(l.pickHealth===0&&l.turn!==0&&!l.opened)||(result.lockpick.binding&&(l.opened||l.pickHealth===0)))fail();
   }else if(s.lockpick!==undefined)fail();
   else if(s.cubeFaces!==undefined){
@@ -58,10 +65,16 @@ function state(value:unknown):PuzzleState {
 }
 export function validatePreparation(value:unknown,checkpoint=false):PrivatePreparation {
   const p=object(value),s=state(p.state),solution=array(p.solution).map(tile);
-  if(solution.length!==s.tiles.length||(s.puzzleType!=='lockpick'&&!traceEnergy({...s,tiles:solution}).solved))fail();
+  if(solution.length!==s.tiles.length||(!['lockpick','ring-door'].includes(s.puzzleType??'pipes')&&!traceEnergy({...s,tiles:solution}).solved))fail();
   if(solution.some((t,i)=>(t?.terminal||s.tiles[i]?.terminal)&&JSON.stringify(t)!==JSON.stringify(s.tiles[i])))fail();
   const origin=(value:unknown)=>{const p=object(value),t=tile(p.tile);if(!t||t.terminal)fail();return{...(p.id!==undefined?{id:text(p.id,80)}:{}),index:integer(p.index,0,s.tiles.length-1),tile:t!,discoveryLabel:text(p.discoveryLabel,120),...(p.notes!==undefined?{notes:text(p.notes,2000)}:{})};};
   const result:PrivatePreparation={state:s,solution,seed:text(p.seed,100),withheld:array(p.withheld).map(origin)};
+  if(s.puzzleType==='ring-door'){
+    const targets=array(object(p.ringSecret).targets,3).map(v=>integer(v,0,2));if(targets.length!==3)fail();
+    result.ringSecret={targets:targets as [number,number,number]};
+    if(result.withheld.length||result.seed!==''||p.hiddenInventory!==undefined||p.trayOrigins!==undefined||p.recoveryDestinations!==undefined)fail();
+    if(s.ringDoor!.opened&&!s.ringDoor!.positions.every((position,i)=>position===targets[i]))fail();
+  }else if(p.ringSecret!==undefined)fail();
   if(s.puzzleType==='lockpick'){
     result.lockSecret={sweetSpot:integer(object(p.lockSecret).sweetSpot,-75,75)};
     if(result.withheld.length||result.seed!==''||p.hiddenInventory!==undefined||p.trayOrigins!==undefined||p.recoveryDestinations!==undefined)fail();

@@ -1,7 +1,8 @@
 # Puzzles & Perils
 
 Shared puzzles for Owlbear Rodeo. Start with a visual puzzle picker: runic
-channels (flat boards, connected cube faces and a 4 x 4 x 1 dais) or lock picking.
+channels (flat boards, connected cube faces and a 4 x 4 x 1 dais), lock picking,
+or a rotating ring door.
 Includes GM authoring, turns/free play, private backups, undo and pause/resume.
 Local demonstration names are fictional.
 
@@ -16,6 +17,14 @@ views never receive that overlay. DCs are table reference labels, not dice rolls
 Each lock starts with one pick. Sustained pressure at a bad angle breaks it;
 only the GM can give another pick. The opening angle remains in private GM
 storage and private backups. Artwork and preview screenshots are original.
+Pick health is visible only in GM view; players use the turning, binding and
+breakage feedback. Visual tension responds immediately while successful opening
+and pick damage still require the controller's confirmation.
+
+Ring doors have three concentric Bear/Moth/Owl rings. Click a ring or its button
+to rotate it; matching the GM's private combination opens the stone door with
+an animation. Set the combination in the builder and provide any clue elsewhere
+in your adventure. This version does not create or require a puzzle-key item.
 
 New puzzles default to free play: any connected room member can rotate, place
 and recall pieces without being in the turn order. The default roster follows
@@ -25,7 +34,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.9.1 is a hosted-testing candidate. Live multi-device/table
+Version 0.10.0 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

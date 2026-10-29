@@ -24,7 +24,9 @@ export function parseRequest(value: unknown): Request | null {
   if (r.fixture !== undefined && !['relay', 'last-connection', 'dual-power'].includes(r.fixture)) return null;
   const c = r.command;
   if (!c || typeof c.puzzleId !== 'string' || !Number.isSafeInteger(c.expectedRevision) || c.expectedRevision < 0) return null;
-  if(c.type==='pick-lock'){
+  if(c.type==='rotate-ring'){
+    if(!Number.isInteger(c.ring)||c.ring<0||c.ring>2)return null;
+  } else if(c.type==='pick-lock'){
     if(!Number.isInteger(c.angle)||Math.abs(c.angle)>90||typeof c.strain!=='boolean')return null;
   } else if (c.type === 'rotate' || c.type === 'select' || c.type === 'place' || c.type === 'gm-rotate' || c.type === 'recall-piece') {
     if (!Number.isInteger(c.tileIndex) || c.tileIndex < 0 || c.tileIndex >= 96) return null;

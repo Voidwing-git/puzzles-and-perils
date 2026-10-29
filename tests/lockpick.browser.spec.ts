@@ -4,7 +4,7 @@ async function lockPage(page:import('@playwright/test').Page){
   await page.goto('/');await page.locator('#open-setup').click();
   await expect(page.getByRole('heading',{name:'Choose a puzzle'})).toBeVisible();
   await expect(page.locator('#draft-size')).toHaveCount(0);
-  await expect(page.locator('.puzzle-type-card img')).toHaveCount(2);
+  await expect(page.locator('.puzzle-type-card img')).toHaveCount(3);
   await expect.poll(()=>page.locator('.puzzle-type-card img').evaluateAll(images=>images.every(image=>(image as HTMLImageElement).complete&&(image as HTMLImageElement).naturalWidth>0))).toBe(true);
   await page.locator('#choose-lockpick').click();
   for(const label of ['Novice','Apprentice','Adept','Expert','Master'])await expect(page.locator('.lock-difficulties')).toContainText(label);
@@ -57,7 +57,7 @@ test('mouse hover aims without clicking; short clicks reset and a sustained mous
   // Captured pointer release outside the face must stop further tension.
   await page.mouse.move(box.x-10,box.y-10);await page.mouse.up();
   await expect(page.locator('#lock-game')).toHaveAttribute('aria-busy','false');
-  await expect.poll(()=>page.locator('#lock-game').evaluate(el=>(el as HTMLElement).style.getPropertyValue('--lock-turn'))).toBe('0deg');
+  await expect.poll(()=>page.locator('#lock-game').evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--lock-turn')))).toBe(0);
   const revision=await page.locator('#revision').innerText();await page.waitForTimeout(500);await expect(page.locator('#revision')).toHaveText(revision);
   await aim(angle);const start=Date.now();await page.mouse.down();await expect(page.locator('#success')).toBeVisible({timeout:10000});await page.mouse.up();
   expect(Date.now()-start).toBeGreaterThanOrEqual(1700);await expect(page.locator('.lock-condition meter')).toHaveAttribute('value','100');
@@ -84,6 +84,27 @@ test('releasing torque early preserves the pick and spectator input cannot move 
   await expect(page.locator('.lock-condition meter')).toHaveAttribute('value','100');
   await page.locator('#viewer').selectOption('spectator');await expect(torque).toBeDisabled();
   await page.locator('#lock-game .lock-surface').focus();await page.keyboard.press('Space');await expect(page.locator('#revision')).toHaveText('Revision 1');
+});
+
+test('initial tension reacts before a slow acknowledgement and release does not replay it',async({page})=>{
+  await page.addInitScript(()=>{
+    const timeout=window.setTimeout.bind(window);
+    window.setTimeout=((callback:TimerHandler,delay?:number,...args:unknown[])=>timeout(callback,delay===90?800:delay,...args)) as typeof window.setTimeout;
+  });
+  await lockPage(page);
+  await page.locator('.lock-angle').fill('0');await page.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
+  await expect.poll(()=>page.locator('#lock-game').evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--lock-turn'))),{timeout:400}).toBeGreaterThan(0);
+  await expect(page.locator('#revision')).toHaveText('Revision 0');await expect(page.locator('#success')).toBeHidden();
+  await page.keyboard.up('Space');await expect.poll(()=>page.locator('#lock-game').evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--lock-turn')))).toBe(0);
+  await expect(page.locator('#revision')).toHaveText('Revision 1');await expect(page.locator('#lock-game')).toHaveAttribute('aria-busy','false');
+  await expect.poll(()=>page.locator('#lock-game').evaluate(el=>parseFloat((el as HTMLElement).style.getPropertyValue('--lock-turn')))).toBe(0);
+  await expect(page.locator('.lock-condition meter')).toHaveAttribute('value','100');
+});
+
+test('switching to the creator cancels a held lock even while Space stays down',async({page})=>{
+  await lockPage(page);await page.locator('.lock-angle').fill('-90');await page.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
+  await page.locator('#open-setup').click();await expect(page.locator('#puzzle-picker-title')).toBeVisible();await expect(page.locator('#lock-game')).toHaveAttribute('aria-busy','false');
+  const revision=await page.locator('#revision').innerText();await page.waitForTimeout(650);await expect(page.locator('#revision')).toHaveText(revision);await page.keyboard.up('Space');
 });
 test('puzzle picker can go back and open the existing pipe builder; lock UI respects reduced motion',async({page})=>{
   await page.emulateMedia({reducedMotion:'reduce'});await page.goto('/');await page.locator('#open-setup').click();

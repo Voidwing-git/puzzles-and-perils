@@ -54,6 +54,7 @@ export function applyLock(preparation:PrivatePreparation,command:Command,actor:A
     // opening. Each continued hold step gives shared mechanical feedback.
     value.tensionMs=command.strain?Math.min(LOCK_OPEN_MS,(value.tensionMs??0)+LOCK_TICK_MS):0;
     const limit=lockTurn(command.angle,preparation.lockSecret.sweetSpot,value.difficulty);
+    value.travelLimit=limit;
     const travel=Math.round(90*value.tensionMs/LOCK_OPEN_MS);
     value.turn=Math.min(limit,travel);
     value.binding=limit<90&&travel>=limit;

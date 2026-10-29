@@ -1,6 +1,7 @@
 import {lockArt} from './lock-art.ts';
 import {lockDifficulties,LOCK_TICK_MS} from '../core/lockpick.ts';
 import type {PublicPuzzle} from '../core/state.ts';
+import {createLockMotion} from './lock-motion.ts';
 
 export function mountLockView(root:HTMLElement,request:(angle:number,strain:boolean)=>Promise<boolean>,give:()=>void){
   root.innerHTML=`<div class="lock-heading"><span class="eyebrow">Lock picking</span><span class="lock-difficulty"></span></div>
@@ -12,9 +13,10 @@ export function mountLockView(root:HTMLElement,request:(angle:number,strain:bool
     <p class="lock-status" role="status" aria-live="polite"></p>`;
   const el=<T extends HTMLElement>(selector:string)=>root.querySelector<T>(selector)!;
   const surface=el('.lock-surface'),slider=el<HTMLInputElement>('.lock-angle'),torque=el<HTMLButtonElement>('.lock-torque'),status=el('.lock-status');
+  const motion=createLockMotion(root);
   let state:PublicPuzzle|undefined,enabled=false,pending=false,holding=false,angle=0,sequence=0,disposed=false,lastRevision=-1,puzzleId='',externalBusy=false,reported='',pressAttempt=-1;
   const heldFeedback=()=>holding&&state?.lockpick?.attempts===pressAttempt&&state.lockpick.angle===angle?state.lockpick:undefined;
-  function draw(){root.style.setProperty('--pick-angle',angle+'deg');root.style.setProperty('--lock-turn',(state?.lockpick?.opened?90:heldFeedback()?.turn??0)+'deg');root.classList.toggle('is-binding',!!heldFeedback()?.binding);slider.value=String(angle);slider.disabled=!enabled||pending||holding||externalBusy;torque.disabled=!enabled||(!holding&&(externalBusy||pending));}
+  function draw(){motion.update(angle,state?.lockpick,holding,heldFeedback(),state?.puzzleId??'',state?.revision??0);slider.value=String(angle);slider.disabled=!enabled||pending||holding||externalBusy;torque.disabled=!enabled||(!holding&&(externalBusy||pending));}
   function release(){holding=false;sequence++;draw();if(state?.lockpick&&!state.lockpick.opened&&!state.paused&&state.lockpick.pickHealth>0&&!reported&&enabled)status.textContent='Find the angle where the cylinder turns freely.';}
   function setAngle(value:number){if(!enabled||pending||holding||externalBusy)return;angle=Math.max(-90,Math.min(90,Math.round(value)));draw();}
   async function start(){
@@ -62,13 +64,13 @@ export function mountLockView(root:HTMLElement,request:(angle:number,strain:bool
       const difficulty=lockDifficulties[lock.difficulty];el('.lock-difficulty').textContent=`${difficulty.name} · DC ${difficulty.dc}`;
       slider.disabled=!enabled||pending||holding||busy;torque.disabled=!enabled||(!holding&&busy);
       el<HTMLMeterElement>('meter').value=lock.pickHealth;
+      el('.lock-condition').hidden=!gm;
       const button=el<HTMLButtonElement>('.lock-give');button.hidden=!gm||lock.pickHealth!==0||lock.opened;button.disabled=busy||!!next.paused;
       root.classList.toggle('pick-broken',lock.pickHealth===0);root.classList.toggle('lock-open',lock.opened);
       status.textContent=lock.opened?'':next.paused?'The GM has paused the puzzle.':lock.pickHealth===0?'The pick broke. Waiting for the GM to give another pick.':reported||(!canPlay&&!busy?'Wait for your turn or for the GM to reconnect.':holding?(heldFeedback()?.binding?'Binding — release and adjust the pick.':'Keep holding while the cylinder turns…'):'Find the angle where the cylinder turns freely.');
-      if(next.revision!==lastRevision&&!holding&&lock.turn>0&&!lock.opened&&!matchMedia('(prefers-reduced-motion: reduce)').matches){el('.lock-cylinder').animate([{transform:'rotate(0deg)'},{transform:`rotate(${lock.turn}deg)`},{transform:'rotate(0deg)'}],{duration:750});}
       lastRevision=next.revision;draw();
     },
     report(message:string){reported=message;status.textContent=message;},
-    dispose(){disposed=true;release();document.removeEventListener('keydown',keydown);document.removeEventListener('keyup',keyup);window.removeEventListener('blur',release);document.removeEventListener('visibilitychange',visibility);},
+    dispose(){disposed=true;release();motion.dispose();document.removeEventListener('keydown',keydown);document.removeEventListener('keyup',keyup);window.removeEventListener('blur',release);document.removeEventListener('visibilitychange',visibility);},
   };
 }

@@ -487,6 +487,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await gm.locator('#choose-lockpick').click();await gm.locator('[name="lock-difficulty"][value="master"]').check();
   await gm.locator('#publish-lock').click();await expect(player.locator('#lock-game')).toBeVisible();
   await expect(player.locator('.lock-difficulty')).toHaveText('Master · DC 25');
+  await expect(player.locator('.lock-condition')).toBeHidden();await expect(gm.locator('.lock-condition')).toBeVisible();
   const opening=await gm.locator('body').evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:token-room:token-a')!).lockSecret.sweetSpot as number);
   await player.locator('.lock-angle').fill(String(opening>0?-90:90));await player.locator('#lock-game .lock-surface').focus();await page.keyboard.down('Space');
   await expect(player.locator('#lock-game')).toHaveClass(/pick-broken/,{timeout:15000});await page.keyboard.up('Space');
@@ -503,5 +504,16 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await gm.locator('#publish-lock').click();await expect(gm.locator('#lock-game')).toBeVisible();await expect(player.locator('#success')).toBeVisible();
   const lockPublic=await page.locator('#state').innerText();for(const field of ['lockSecret','sweetSpot','tolerance'])expect(lockPublic).not.toContain(field);
   await page.locator('#gm-window').screenshot({path:'docs/evidence/lockpick-shared-gm.png'});
+  await gm.locator('#open-setup').click();await gm.locator('#choose-ring-door').click();
+  for(let i=0;i<3;i++)await gm.locator('#ring-target-'+i).selectOption(String(i));
+  await gm.locator('#publish-ring-door').click();await expect(player.locator('#ring-door-game')).toBeVisible();
+  await expect(player.locator('#ring-target-0')).toHaveCount(0);
+  const ringState=(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle.ringDoor!;
+  for(let ring=0;ring<3;ring++)for(let step=0;step<(ring-ringState.positions[ring]+3)%3;step++){
+    await player.locator(`[data-ring-button="${ring}"]`).click();await expect(player.locator('#ring-door-game')).toHaveAttribute('aria-busy','false');
+  }
+  await expect(player.locator('#ring-door-game')).toHaveClass(/ring-door-open/);await expect(gm.locator('#success')).toBeVisible();await expect(gm.locator('#success-title')).toHaveText('The door opens');
+  const ringPublic=await page.locator('#state').innerText();expect(ringPublic).not.toContain('ringSecret');
+  await page.locator('#gm-window').screenshot({path:'docs/evidence/ring-door-shared-gm.png'});
   expect(errors).toEqual([]);
 });

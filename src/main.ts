@@ -6,6 +6,7 @@ import { installPuzzleFit } from './ui/viewport-fit.ts';
 import { closePieceMenu, openPieceMenu, updatePieceMenu } from './ui/piece-menu.ts';
 import { mountPuzzleCreator } from './ui/puzzle-creator.ts';
 import {mountLockView} from './ui/lock-view.ts';
+import {mountRingDoorView} from './ui/ring-door-view.ts';
 import { rejectionMessages } from './core/commands.ts';
 import { fixtureOptions } from './core/fixtures.ts';
 import type { FixtureId } from './core/fixtures.ts';
@@ -202,7 +203,18 @@ const lockView=mountLockView(lockHost,async(angle,strain)=>{
   }catch(error){lockView.report(error instanceof Error?error.message:'The lock action could not complete.');return false;}
   finally{queuedActions--;render();}
 },()=>enqueue('give-lockpick'));
-function canPickLock(){return snapshot.puzzleType==='lockpick'&&!snapshot.paused&&!snapshot.solved&&(snapshot.mode==='free'?adapter.freePlayAllowed:adapter.viewer===snapshot.participants[snapshot.activeIndex].id)&&(!(adapter instanceof OwlbearAdapter)||adapter.available);}
+function canUseMechanism(){return !settingUp&&!publishing&&!snapshot.paused&&!snapshot.solved&&(snapshot.mode==='free'?adapter.freePlayAllowed:adapter.viewer===snapshot.participants[snapshot.activeIndex].id)&&(!(adapter instanceof OwlbearAdapter)||adapter.available);}
+function canPickLock(){return snapshot.puzzleType==='lockpick'&&canUseMechanism();}
+const ringHost=document.createElement('section');ringHost.id='ring-door-game';ringHost.className='ring-door-panel';ringHost.hidden=true;boardPanel.append(ringHost);
+const ringView=mountRingDoorView(ringHost,async ring=>{
+  if(queuedActions||publishing||adapter.pending||snapshot.puzzleType!=='ring-door'||!canUseMechanism()||!Number.isInteger(ring)||ring<0||ring>2)return false;
+  queuedActions++;render();
+  try{
+    const result=await adapter.request({type:'rotate-ring',ring:ring as 0|1|2,puzzleId:snapshot.puzzleId,expectedRevision:snapshot.revision},false);
+    await displaySnapshot(result.snapshot);if(!result.accepted)ringView.report(rejectionMessages[result.reason]);return result.accepted;
+  }catch(error){ringView.report(error instanceof Error?error.message:'The ring could not be moved.');return false;}
+  finally{queuedActions--;render();}
+});
 let lastTouch = { index: -1, time: -Infinity };
 let lastTap: { index: number; time: number } | null = null;
 let touchStart: { index: number; pointer: number; x: number; y: number; time: number } | null = null;
@@ -288,7 +300,7 @@ function canRotate(): boolean {
 }
 
 function render() {
-  const isLock=snapshot.puzzleType==='lockpick';document.body.classList.toggle('lock-game',isLock);
+  const isLock=snapshot.puzzleType==='lockpick',isRing=snapshot.puzzleType==='ring-door';document.body.classList.toggle('lock-game',isLock);document.body.classList.toggle('ring-game',isRing);
   if (board.children.length !== snapshot.tiles.length) { selected = null; focusIndex = 0; createBoard(); }
   board.style.gridTemplateColumns = `repeat(${Math.max(1,snapshot.width)}, minmax(0, 1fr))`;
   board.dataset.columns = String(snapshot.width);
@@ -328,8 +340,8 @@ function render() {
   element('revision').textContent = `Revision ${snapshot.revision}`;
   element('success').hidden = !snapshot.connected;
   element('success').dataset.solved=String(snapshot.solved);
-  element('success-title').textContent = isLock?'The lock opens':snapshot.solved ? 'The runes are awakened' : 'Both runes are connected';
-  element('success-detail').textContent = isLock?'The mechanism yields.':snapshot.solved ? 'Every target is connected. The chamber opens.' : 'End the turn to confirm. You can still adjust your chosen piece.';
+  element('success-title').textContent = isRing?'The door opens':isLock?'The lock opens':snapshot.solved ? 'The runes are awakened' : 'Both runes are connected';
+  element('success-detail').textContent = isRing?'The rings align and the passage opens.':isLock?'The mechanism yields.':snapshot.solved ? 'Every target is connected. The chamber opens.' : 'End the turn to confirm. You can still adjust your chosen piece.';
   updateCompletionEffect(element('success'),snapshot.puzzleId,snapshot.solved);
   element('turn-hint').textContent = snapshot.paused?'':snapshot.solved ? 'All runes are powered. Moves are locked.' :
     adapter.viewer === 'spectator' ? 'You are observing. Select a tile to inspect it.' :
@@ -347,7 +359,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.9.1 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.10.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
@@ -387,7 +399,8 @@ function render() {
   rotate.setAttribute('aria-busy', String(queuedActions > 0));
   lockView.update(snapshot,canPickLock()||(isLock&&queuedActions>0&&adapter.pending),!(adapter instanceof OwlbearAdapter)||(adapter.gm&&!adapter.preview),queuedActions>0||adapter.pending);
   lockHost.setAttribute('aria-busy',String(queuedActions>0||adapter.pending));
-  if(!(adapter instanceof OwlbearAdapter)){element('shared-admin').hidden=!isLock;fixture.hidden=isLock;(fixture.previousElementSibling as HTMLElement).hidden=isLock;loadBoard.hidden=isLock;}
+  ringView.update(snapshot,isRing&&canUseMechanism(),queuedActions>0||adapter.pending);ringHost.setAttribute('aria-busy',String(queuedActions>0||adapter.pending));
+  if(!(adapter instanceof OwlbearAdapter)){element('shared-admin').hidden=!(isLock||isRing);fixture.hidden=isLock||isRing;(fixture.previousElementSibling as HTMLElement).hidden=isLock||isRing;loadBoard.hidden=isLock||isRing;}
   fitPuzzle();
 }
 

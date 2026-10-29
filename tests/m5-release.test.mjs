@@ -8,7 +8,7 @@ import {allowedSource,allowedSite} from '../scripts/publication-files.mjs';
 import {zipStore,inspectZip} from '../scripts/zip-store.mjs';
 
 test('only approved gameplay PNGs without metadata can be published',()=>{
-  for(const name of ['channels','lockpick']){
+  for(const name of ['channels','lockpick','ring-door']){
     const file=`public/previews/${name}.png`,data=fs.readFileSync(file);
     assert.ok(isPreview(file,data));assert.ok(isPreview(`previews/${name}.png`,data));
     assert.equal(isPreview('public/previews/other.png',data),false);

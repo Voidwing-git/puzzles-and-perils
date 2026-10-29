@@ -7,6 +7,7 @@ export function puzzleEvent(preparation:PrivatePreparation,command:Command,actor
   let detail=description;
   if(!detail){
     switch(command.type){
+      case 'rotate-ring':detail=`Rotated the ${['outer','middle','inner'][command.ring]} door ring`;break;
       case 'pick-lock':detail=command.strain?'Applied pressure to the lock':'Tested a lockpick angle';break;
       case 'give-lockpick':detail='Gave the players another lockpick';break;
       case 'rotate':case 'gm-rotate':detail=`Rotated ${position(command.tileIndex)} clockwise`;break;

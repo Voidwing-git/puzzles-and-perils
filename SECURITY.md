@@ -29,12 +29,15 @@ Player names/IDs, turn order and the playable board are intentionally shared
 within the room. Scene token identifiers are game data, not authentication
 credentials. Static release files contain no captured room state.
 
-Seeds, solution orientations, lock opening angles, undiscovered piece definitions, GM notes and undo
+Seeds, solution orientations, lock opening angles, ring-door combinations, undiscovered piece definitions, GM notes and undo
 checkpoints remain in the GM browser's localStorage or an explicitly downloaded
 private backup. Public projections/exports use reviewed fields only.
 Lock turn feedback is public gameplay information; the hidden opening angle is
-not sent with it. Only the GM may replace a broken pick. Public screenshot
-previews show original artwork with fictional/local demo data; the release
+not sent with it. Only the GM may replace a broken pick. Lock health is hidden in the player UI;
+it remains part of shared gameplay state, not a private secret. Predicted motion
+does not authoritatively open a lock or damage a pick. Public screenshot
+previews show original artwork with fictional/local demo data and exclude GM
+answer overlays; the release
 scanner permits only their exact paths and rejects image metadata chunks.
 
 Private storage is not an encrypted vault. Other scripts on the same origin
