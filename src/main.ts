@@ -6,7 +6,7 @@ import { installPuzzleFit } from './ui/viewport-fit.ts';
 import { closePieceMenu, openPieceMenu, updatePieceMenu } from './ui/piece-menu.ts';
 import { mountPuzzleCreator } from './ui/puzzle-creator.ts';
 import {mountLockView} from './ui/lock-view.ts';
-import {mountChallengeView} from './ui/challenge-view.ts';
+import {mountChallengeHost} from './ui/challenge-host.ts';
 import {mountRingDoorView} from './ui/ring-door-view.ts';
 import { rejectionMessages } from './core/commands.ts';
 import { fixtureOptions } from './core/fixtures.ts';
@@ -217,7 +217,7 @@ const ringView=mountRingDoorView(ringHost,async ring=>{
   finally{queuedActions--;render();}
 });
 const challengeHost=document.createElement('section');challengeHost.id='challenge-game';challengeHost.className='challenge-panel';challengeHost.hidden=true;boardPanel.append(challengeHost);
-const challengeView=mountChallengeView(challengeHost,async action=>{
+const challengeView=mountChallengeHost(challengeHost,async action=>{
   const retry=action.op==='retry';
   if(queuedActions||publishing||adapter.pending||snapshot.puzzleType!=='challenge'||(!retry&&!canUseMechanism())||(retry&&adapter instanceof OwlbearAdapter&&(!adapter.gm||adapter.preview)))return false;
   queuedActions++;render();
@@ -370,7 +370,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.11.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.12.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
@@ -410,7 +410,7 @@ function render() {
   rotate.setAttribute('aria-busy', String(queuedActions > 0));
   lockView.update(snapshot,canPickLock()||(isLock&&queuedActions>0&&adapter.pending),!(adapter instanceof OwlbearAdapter)||(adapter.gm&&!adapter.preview),queuedActions>0||adapter.pending);
   lockHost.setAttribute('aria-busy',String(queuedActions>0||adapter.pending));
-  challengeView.update(snapshot,isChallenge&&canUseMechanism(),!(adapter instanceof OwlbearAdapter)||(adapter.gm&&!adapter.preview),queuedActions>0||adapter.pending);
+  challengeView.update(snapshot,isChallenge&&canUseMechanism(),!(adapter instanceof OwlbearAdapter)||(adapter.gm&&!adapter.preview),queuedActions>0||adapter.pending,!(adapter instanceof OwlbearAdapter)||!adapter.gm||adapter.preview);
   ringView.update(snapshot,isRing&&canUseMechanism(),queuedActions>0||adapter.pending);ringHost.setAttribute('aria-busy',String(queuedActions>0||adapter.pending));
   if(!(adapter instanceof OwlbearAdapter)){element('shared-admin').hidden=!(isLock||isRing||isChallenge);fixture.hidden=isLock||isRing||isChallenge;(fixture.previousElementSibling as HTMLElement).hidden=isLock||isRing||isChallenge;loadBoard.hidden=isLock||isRing||isChallenge;}
   fitPuzzle();

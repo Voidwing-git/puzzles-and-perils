@@ -1,10 +1,10 @@
 import {test,expect,type Page} from '@playwright/test';
 import type {PrivatePreparation} from '../src/core/state.ts';
-import {challengeCatalog,type ChallengeKind} from '../src/core/challenges.ts';
+import {createChallenge,challengeCatalog,type ChallengeKind} from '../src/core/challenges.ts';
 const saved=(page:Page)=>page.evaluate(()=>JSON.parse(localStorage.getItem('arcane-pipes:private:m3:local:active')!) as PrivatePreparation);
-async function make(page:Page,kind:ChallengeKind,count=1){await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-'+kind).click();if(count>1)await page.locator('#challenge-count').selectOption(String(count));await page.locator('#publish-challenge').click();await expect(page.locator('#challenge-game')).toBeVisible();}
+async function make(page:Page,kind:ChallengeKind,count=1){if(!['terminal','spectrum'].includes(kind)){const legacy=createChallenge(kind,crypto.randomUUID(),count);await page.goto('/');await page.evaluate(p=>localStorage.setItem('arcane-pipes:private:m3:local:active',JSON.stringify(p)),legacy);await page.reload();await expect(page.locator('#challenge-game')).toBeVisible();return;}await page.goto('/');await page.locator('#open-setup').click();await page.locator('#choose-'+kind).click();if(count>1)await page.locator('#challenge-count').selectOption(String(count));await page.locator('#publish-challenge').click();await expect(page.locator('#challenge-game')).toBeVisible();}
 async function click(page:Page,selector:string){const revision=(await saved(page)).state.revision;await page.locator('#challenge-game '+selector).click();await expect.poll(async()=>(await saved(page)).state.revision).toBeGreaterThan(revision);}
-for(const kind of Object.keys(challengeCatalog) as ChallengeKind[])test(`${kind} creator, playable controls, GM solve, restore and read-only spectator`,async({page})=>{
+for(const kind of Object.keys(challengeCatalog) as ChallengeKind[])test(`${kind} legacy compatibility, playable controls, GM solve, restore and read-only spectator`,async({page})=>{
   const errors:string[]=[];page.on('pageerror',e=>errors.push(e.message));await make(page,kind);
   await expect(page.locator('.inventory-panel')).toBeHidden();await expect(page.locator('#goal-status-panel')).toBeHidden();
   if(kind==='terminal')await click(page,'[data-choice="'+(await saved(page)).challengeSecret!.answers[0][0]+'"]');
@@ -30,8 +30,8 @@ for(const kind of Object.keys(challengeCatalog) as ChallengeKind[])test(`${kind}
   const rev=(await saved(page)).state.revision;await page.keyboard.press('Space');expect((await saved(page)).state.revision).toBe(rev);
   expect(errors).toEqual([]);
 });
-test('waveform five signals and spectrum six samples progress and retain their GM count settings',async({page})=>{
-  for(const kind of ['waveform','spectrum'] as const){const count=kind==='waveform'?5:6;await make(page,kind,count);
+test('spectral six samples progress and retain their GM count settings',async({page})=>{
+  for(const kind of ['spectrum'] as const){const count=6;await make(page,kind,count);
     for(let stage=0;stage<count;stage++){
       if(kind==='spectrum'){for(const n of (await saved(page)).challengeSecret!.answers[0])await click(page,`[data-choice="${n}"]:not(.spectral-slot)`);}
       else for(let i=0;i<2;i++){const v=(await saved(page)).state.challenge!.target[i],rev=(await saved(page)).state.revision;await page.locator(`[data-dial="${i}"]`).fill(String(v));await page.locator(`[data-dial="${i}"]`).dispatchEvent('change');await expect.poll(async()=>(await saved(page)).state.revision).toBeGreaterThan(rev);}

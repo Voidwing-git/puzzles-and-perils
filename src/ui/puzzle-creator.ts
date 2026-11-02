@@ -1,4 +1,4 @@
-import {mountChallengeAuthoring} from './challenge-authoring.ts';
+import {mountChallengeAuthoring} from './challenge-authoring-v2.ts';
 import {challengeCatalog,type ChallengeKind} from '../core/challenges.ts';
 import {mountAuthoring} from './authoring.ts';
 import {mountLockAuthoring} from './lock-authoring.ts';

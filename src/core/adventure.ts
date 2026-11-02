@@ -119,6 +119,7 @@ export function applyAdventure(preparation:PrivatePreparation,command:Command,ac
     if(command.type==='undo'){
       const previous=preparation.history?.at(-1);if(!previous)return reject('no-history');
       const next=JSON.parse(previous) as PrivatePreparation;
+      if(next.state.challenge?.version===2&&state.challenge?.version===2&&next.state.challenge.attempt===state.challenge.attempt&&next.state.paused===state.paused)next.state.challenge.clock=structuredClone(state.challenge.clock);
       next.state.puzzleId=state.puzzleId;next.state.revision=state.revision+1;
       if(next.startingState)next.startingState.puzzleId=state.puzzleId;
       next.history=preparation.history!.slice(0,-1);
@@ -126,6 +127,8 @@ export function applyAdventure(preparation:PrivatePreparation,command:Command,ac
       return{result:{accepted:true,state:next.state},preparation:next};
     }
     const next=structuredClone(preparation);next.state.paused=command.type==='pause-puzzle';next.state.revision++;
+    const clock=next.state.challenge?.clock;
+    if(clock?.deadline){if(next.state.paused&&!clock.pausedAt)clock.pausedAt=Date.now();else if(!next.state.paused&&clock.pausedAt){clock.deadline+=Date.now()-clock.pausedAt;clock.pausedAt=0;}}
     result={result:{accepted:true,state:next.state},preparation:next};
   }else{
     if(state.paused)return reject('paused');

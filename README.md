@@ -36,23 +36,37 @@ The puzzle picker includes actual gameplay screenshots for every type:
   four attempts, and single-use bracket tools. A lockout waits for the GM.
 - **Spectral analysis:** combine three additive/subtractive fragments to match
   absorption lines. The GM chooses 1–6 samples for completion.
-- **Wave harmonics:** drag the wavelength and amplitude dials (or use their
-  sliders/arrow keys) to match the dashed target. The GM chooses 1–5 signals.
-- **Hex circuits:** rotate seven hex tiles; right click reverses rotation.
-- **Timing pins:** a rotating sweep sets/releases pins and reverses direction.
-- **Glyph cipher:** match three pairs of original glyphs to the visible clues.
-- **Mirror console:** aim a reflected pointer at illuminated nodes.
-- **Orbit lock:** catch dots on three rotating rings, holding through long arcs.
-- **Symbol stream:** hold and release the capture control over required glyphs.
-- **Data worm:** steer around obstacles and collect all five runes; Space boosts.
+- **Wave harmonics:** tune 1–5 receivers together and lock the rack once every
+  signal matches. Difficulty adds phase/harmonic dials and tighter tolerances.
+- **Hex circuits:** varied connections in a fixed hexagonal frame. Configure
+  3–19 active sockets and extra links; seven sockets use center plus six neighbors.
+  Rotation continues through full turns; right click reverses rotation.
+- **Timing pins:** choose pin count, sweep speed, direction reversal, hit window
+  and mistake allowance.
+- **Glyph cipher:** deduce one 3–7 glyph code from shuffled overlapping pairs.
+- **Mirror console:** true reflection across the drawn axis, with randomized
+  goals on both sides, configurable target count and tolerance.
+- **Orbit lock:** 2–5 tracks with randomized dots/arcs and GM-configured speed.
+  Move the mouse inward/outward or use W/S and Up/Down. Tap/hold click or Space.
+- **Symbol stream:** continuously transfer the required quantities while holding
+  over needed symbols. Unwanted symbols and excess input cause corruption.
+- **Data snake:** collect plain dots with a growing body, solid boundaries,
+  configurable interior walls, lives, dot count and speed. Space boosts.
 
 These are original tabletop adaptations inspired by familiar game mechanics,
-not exact replicas. Timing consoles start explicitly, stop on focus loss, and
-use five mistakes instead of a countdown. Failed attempts wait for the GM's
-**Allow another attempt** control. Turn order, free play, undo, pause, solve,
+with configurable difficulty. Optional attempt timers start when a player opens
+gameplay (or the GM interacts), and continue while the window is closed. GM Pause
+freezes the timer. On failure, choose GM-only reset or retry by closing/reopening;
+opening another window cannot extend an active attempt. Turn order, free play, undo, pause, solve,
 reset and private backups also work with these puzzles. Animation clocks and
 hit timing run locally; controller validation enforces room identity, turns,
 revision and completion rules, not competitive anti-cheat timing.
+
+Existing 0.11 puzzles remain loadable. Use **Edit → Save changes** to restart an
+existing console with the new rules and creator settings. GM solution sections
+show actual answers/solved circuits where useful; generic placeholder hints were
+removed. Spectral preview, selected strips, combined result and goal share the
+same numbered wavelength columns and plotting scale.
 
 New puzzles default to free play: any connected room member can rotate, place
 and recall pieces without being in the turn order. The default roster follows
@@ -62,7 +76,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.11.0 is a hosted-testing candidate. Live multi-device/table
+Version 0.12.0 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

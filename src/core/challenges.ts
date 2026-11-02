@@ -1,30 +1,36 @@
 import type {Actor,Command,PrivatePreparation} from './state.ts';
 import type {CommandResult,Rejection} from './commands.ts';
+import {applyAdvanced,projectAdvanced,validateAdvanced,validateAdvancedSecret} from './challenge-rules.ts';
 
 export const challengeCatalog={
   terminal:{name:'Word terminal',hint:'Find the password using positional likeness. Bracket pairs remove duds or replenish attempts.',source:'Fallout-style word deduction'},
   spectrum:{name:'Spectral analysis',hint:'Combine three fragments to reproduce the target. Dashed lines subtract absorption.',source:'Spectrograph · 1–6 samples'},
-  waveform:{name:'Wave harmonics',hint:'Turn the wavelength and amplitude dials until the two traces match, then lock the signal.',source:'1–5 signals'},
+  waveform:{name:'Wave harmonics',hint:'Tune a stack of receivers, then lock every signal together.',source:'1–5 receivers · Phase and harmonics'},
   hex:{name:'Hex circuits',hint:'Rotate the hexagons until every channel joins its neighbor. Right click turns backward.',source:'Corpus-style circuit hacking'},
   rotor:{name:'Timing pins',hint:'Click or press Space as the sweep reaches a pin. Hitting a set pin releases it. The sweep reverses after each hit.',source:'Grineer-style timing'},
-  glyph:{name:'Glyph cipher',hint:'Use the clue pairs to align both halves of each cipher. Rotate either symbol, then verify the pair.',source:'Orokin-style symbol pairs'},
+  glyph:{name:'Glyph cipher',hint:'Reconstruct one ordered code from shuffled overlapping clue pairs.',source:'Orokin-style symbol deduction'},
   mirror:{name:'Mirror console',hint:'Move to aim the reflected cursor. Click when its gold outline reaches an illuminated node.',source:'Narmer-style mirrored input'},
-  orbit:{name:'Orbit lock',hint:'Choose a ring. Catch its dots at the top gate; hold through the long arc. Adjust speed with A and D.',source:'Duviri-style orbit timing'},
-  sequence:{name:'Symbol stream',hint:'Hold Space or Capture while the required symbol passes through the gate. Release before the next symbol.',source:'Entrati / Pom-2-style stream'},
-  worm:{name:'Data worm',hint:'Steer with arrows, WASD, or the direction pad. Gather every rune and avoid walls. Hold Space to boost.',source:'1999-style collection hack'},
+  orbit:{name:'Orbit lock',hint:'Move between tracks, tap for dots, and hold through arcs using mouse or keyboard.',source:'Duviri-style orbit timing'},
+  sequence:{name:'Symbol stream',hint:'Hold to transfer the required quantities of scrolling symbols. Avoid excess input and corruption.',source:'Entrati / Pom-2-style stream'},
+  worm:{name:'Data snake',hint:'Collect every dot within your available lives. Avoid walls and your own growing body.',source:'1999-style snake'},
 } as const;
 export type ChallengeKind=keyof typeof challengeCatalog;
 export interface ChallengeState {
+  version?:2;
+  rules?:import('./challenge-rules.ts').ChallengeRules;
+  clock?:{deadline:number;pausedAt:number};
+  attempt?:number;
+  livesLeft?:number;
   kind:ChallengeKind;total:number;stage:number;opened:boolean;failed:boolean;
   values:number[];target:number[];pieces:number[][];words:string[];
   used:number[];feedback:string;mistakes:number;moves:number;
 }
-export interface ChallengeAction {op:'choose'|'set'|'check'|'hit'|'move'|'bracket'|'retry';index?:number;value?:number;phase?:number;hold?:number}
+export interface ChallengeAction {op:'choose'|'set'|'check'|'hit'|'move'|'bracket'|'retry'|'enter'|'expire'|'capture';index?:number;value?:number;phase?:number;hold?:number}
 const int=(n:unknown,a:number,b:number)=>Number.isInteger(n)&&Number(n)>=a&&Number(n)<=b;
 export function validChallengeAction(a:unknown):a is ChallengeAction{
   if(!a||typeof a!=='object')return false;const v=a as ChallengeAction;
-  return ['choose','set','check','hit','move','bracket','retry'].includes(v.op)&&
-    (v.index===undefined||int(v.index,0,143))&&(v.value===undefined||int(v.value,-1,150))&&
+  return ['choose','set','check','hit','move','bracket','retry','enter','expire','capture'].includes(v.op)&&
+    (v.index===undefined||int(v.index,0,191))&&(v.value===undefined||int(v.value,-1,300))&&
     (v.phase===undefined||int(v.phase,0,359))&&(v.hold===undefined||int(v.hold,0,3000));
 }
 export const rand=(n:number)=>crypto.getRandomValues(new Uint32Array(1))[0]%n;
@@ -65,12 +71,13 @@ export function createChallenge(kind:ChallengeKind,puzzleId:string,total=1):Priv
   // Future visible samples are generated on advancement; only current secret is needed.
   return{state,seed:'',solution:[],withheld:[],challengeSecret:{answers:[[...first.answer],[...first.answer]]},startingState:structuredClone(state)};
 }
-export function projectChallenge(c:ChallengeState):ChallengeState{return{kind:c.kind,total:c.total,stage:c.stage,opened:c.opened,failed:c.failed,values:[...c.values],target:[...c.target],pieces:c.pieces.map(v=>[...v]),words:[...c.words],used:[...c.used],feedback:c.feedback,mistakes:c.mistakes,moves:c.moves};}
+export function projectChallenge(c:ChallengeState):ChallengeState{if(c.version===2)return projectAdvanced(c);return{kind:c.kind,total:c.total,stage:c.stage,opened:c.opened,failed:c.failed,values:[...c.values],target:[...c.target],pieces:c.pieces.map(v=>[...v]),words:[...c.words],used:[...c.used],feedback:c.feedback,mistakes:c.mistakes,moves:c.moves};}
 export function hexAligned(c:ChallengeState){return c.values.every((r,i)=>i===0||r%6===0);}
 export function spectrumSum(c:ChallengeState){return c.target.map((_,i)=>c.values.reduce((n,p)=>n+c.pieces[p][i],0));}
 export const circularDistance=(a:number,b:number)=>Math.abs(((a-b+540)%360)-180);
 export const mirrorPoint=(mode:number,x:number,y:number):[number,number]=>[mode===1?x:100-x,mode===0?y:100-y];
 export function applyChallenge(preparation:PrivatePreparation,command:Command,actor:Actor):{result:CommandResult;preparation:PrivatePreparation}|null{
+  const advanced=applyAdvanced(preparation,command,actor);if(advanced)return advanced;
   const state=preparation.state;
   const reject=(reason:Rejection)=>({result:{accepted:false as const,state,reason},preparation});
   if(state.puzzleType!=='challenge')return command.type==='challenge-action'?reject('invalid-challenge-action'):null;
@@ -151,6 +158,7 @@ export function applyChallenge(preparation:PrivatePreparation,command:Command,ac
 
 // Strict bounded reconstruction for private imports and history; unknown keys are never copied.
 export function validateChallenge(value:unknown):ChallengeState{
+  if((value as ChallengeState)?.version===2)return validateAdvanced(value);
   const fail=():never=>{throw new Error('Invalid challenge save.');};
   if(!value||typeof value!=='object')return fail();const c=value as ChallengeState;
   const nums=(v:unknown,max:number,min=-1,high=359):number[]=>Array.isArray(v)&&v.length<=max&&v.every(n=>int(n,min,high))?[...v]:fail();
@@ -171,6 +179,7 @@ export function validateChallenge(value:unknown):ChallengeState{
   return result;
 }
 export function validateChallengeSecret(c:ChallengeState,value:unknown):{answers:number[][]}{
+  if(c.version===2)return validateAdvancedSecret(c,value);
   const answers=(value as {answers?:unknown})?.answers;
   if(!Array.isArray(answers)||answers.length!==2||answers.some(a=>!Array.isArray(a)||a.length>16||a.some(n=>!int(n,0,100))))throw new Error('Invalid private challenge.');
   const a=answers[0] as number[];

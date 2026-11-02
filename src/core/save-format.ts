@@ -92,6 +92,8 @@ export function validatePreparation(value:unknown,checkpoint=false):PrivatePrepa
   if(s.ringDoor&&result.startingState?.ringDoor&&JSON.stringify(effectiveRingSymbols(s.ringDoor))!==JSON.stringify(effectiveRingSymbols(result.startingState.ringDoor)))fail();
   if(s.challenge){
     const start=result.startingState?.challenge;if(!start||start.kind!==s.challenge.kind||start.total!==s.challenge.total||start.stage!==0||start.opened||start.failed)fail();
+    if(start!.version!==s.challenge.version||JSON.stringify(start!.rules)!==JSON.stringify(s.challenge.rules))fail();
+    if(s.challenge.clock?.pausedAt&&!s.paused)fail();
     const initial=result.challengeSecret!.answers[1];validateChallengeSecret(start!,{answers:[initial,initial]});
     if(s.challenge.stage===0&&(['words','target',...(s.challenge.kind==='terminal'?[]:['pieces'])] as ('words'|'target'|'pieces')[]).some(key=>JSON.stringify(start![key])!==JSON.stringify(s.challenge![key])))fail();
   }
@@ -105,6 +107,7 @@ export function validatePreparation(value:unknown,checkpoint=false):PrivatePrepa
   for(const encoded of result.history??[]){const previous=JSON.parse(encoded) as PrivatePreparation;
     if(s.ringDoor&&previous.state.ringDoor&&JSON.stringify(effectiveRingSymbols(s.ringDoor))!==JSON.stringify(effectiveRingSymbols(previous.state.ringDoor)))fail();
     if(s.challenge&&(previous.state.challenge?.kind!==s.challenge.kind||previous.state.challenge?.total!==s.challenge.total))fail();
+    if(s.challenge&&(previous.state.challenge?.version!==s.challenge.version||JSON.stringify(previous.state.challenge?.rules)!==JSON.stringify(s.challenge.rules)))fail();
   }
   return result;
 }

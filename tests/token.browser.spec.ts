@@ -527,7 +527,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     else if(kind==='waveform'){await player.locator('[data-dial="0"]').fill('30');await player.locator('[data-dial="0"]').dispatchEvent('change');}
     else if(kind==='mirror'){const box=(await player.locator('#challenge-game svg').boundingBox())!;await page.mouse.click(box.x+box.width*.25,box.y+box.height*.5);}
     else if(kind==='worm')await player.locator('#challenge-game [data-direction="1"]').click();
-    else{await player.locator('#challenge-game [data-start]').click();const hit=player.locator('#challenge-game [data-hit]');await hit.focus();await page.keyboard.down('Space');if(kind!=='rotor')await page.waitForTimeout(150);await page.keyboard.up('Space');}
+    else{await player.locator('#challenge-game .challenge-surface').evaluate((el:HTMLElement)=>{el.tabIndex=0;el.focus();});await page.keyboard.down('Space');if(kind!=='rotor')await page.waitForTimeout(kind==='sequence'?350:150);await page.keyboard.up('Space');}
     await expect.poll(async()=>(await readPublic()).revision).toBeGreaterThan(before.revision);
     const visible=await page.locator('#state').innerText();expect(visible).not.toContain('challengeSecret');expect(visible).not.toContain('answers');
     await gm.locator('#complete-puzzle').click();await expect(player.locator('#success')).toBeVisible();
@@ -535,5 +535,12 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     await page.locator('#player-window').evaluate((frame:HTMLIFrameElement)=>{frame.src=frame.src;});await expect(player.locator('#success')).toBeVisible();
     await gm.locator('#reset-puzzle').click();await expect(player.locator('#success')).toBeHidden();
   }
+  // Authoring/finalizing in GM view does not spend the players' timer.
+  const playerSource=await page.locator('#player-window').getAttribute('src');await page.locator('#player-window').evaluate((frame:HTMLIFrameElement)=>{frame.src='about:blank';});
+  await gm.locator('#open-setup').click();await gm.locator('#choose-hex').click();await gm.locator('[data-rule="timerSeconds"]').fill('60');await gm.locator('[data-rule="timerSeconds"]').dispatchEvent('change');await gm.locator('#publish-challenge').click();
+  await expect(gm.locator('#challenge-game')).toBeVisible();await page.waitForTimeout(200);
+  const clockDeadline=async()=>(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle.challenge!.clock!.deadline;
+  expect(await clockDeadline()).toBe(0);
+  await page.locator('#player-window').evaluate((frame:HTMLIFrameElement,src)=>{frame.src=src!;},playerSource);await expect(player.locator('#challenge-game')).toBeVisible();await expect.poll(clockDeadline).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
