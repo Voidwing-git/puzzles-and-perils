@@ -370,7 +370,7 @@ function render() {
       `${tile.terminal ? `Fixed terminal (${tile.energy ?? 'azure'}). ` : ''}Openings: ${ports(tile).map((port) => directionNames[port]).join(', ')}. ${snapshot.mixed.includes(selected) ? 'Mixed energy — separate the currents.' : snapshot.powered.includes(selected) ? `✦ Powered from the source (${snapshot.poweredBy[selected][0]}).` : 'Not connected to the source.'}`;
   }
   if (adapter instanceof OwlbearAdapter) {
-    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.12.0 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
+    document.querySelector('.demo-banner')!.textContent = `Puzzles & Perils 0.12.1 · ${adapter.preview ? 'PLAYER PREVIEW · Private rehearsal · Shared puzzle unchanged' : adapter.status}`;
     viewer.hidden = !adapter.gm;
     viewer.previousElementSibling!.textContent = adapter.gm ? 'View as' : 'Owlbear player';
     (viewer.previousElementSibling as HTMLElement).hidden = !adapter.gm;
@@ -399,6 +399,7 @@ function render() {
     freePlay.closest('label')!.hidden = false;
   }
   rotate.disabled = queuedActions > 0 || !canRotate();
+  if(!(adapter instanceof OwlbearAdapter))for(const id of ['reset-puzzle','complete-puzzle','sync-players'])(element(id) as HTMLButtonElement).disabled=!!snapshot.paused||queuedActions>0||adapter.pending;
   const canEndTurn = !(adapter instanceof OwlbearAdapter) ||
     (adapter.gm && !adapter.preview) || adapter.viewer === current.id;
   nextTurn.disabled = !!snapshot.paused || (adapter instanceof OwlbearAdapter && !adapter.available) || !canEndTurn || queuedActions > 0 || adapter.pending || snapshot.solved || snapshot.mode === 'free';
@@ -460,6 +461,7 @@ async function send(type: Command['type'], tileIndex?: number, mode?: 'turns' | 
     !snapshot.turnEdit || snapshot.turnEdit.tileIndex === tileIndex)) return;
   const expectedRevision = snapshot.revision;
   const puzzleId = snapshot.puzzleId;
+  const commandContext=adapter instanceof OwlbearAdapter?adapter.commandContext:puzzleId;
   const command: Command = type === 'set-roster' ? {type,playerIds:playerIds!,expectedRevision,puzzleId}
     : type === 'place' ? { type, tileIndex: tileIndex!, pieceId: pieceId!, expectedRevision, puzzleId }
     : type === 'recover' ? { type, pieceId: pieceId!, ...(destination ? { destination } : {}), expectedRevision, puzzleId }
@@ -476,9 +478,20 @@ async function send(type: Command['type'], tileIndex?: number, mode?: 'turns' | 
   feedback.textContent = sharedMode ? 'Submitting puzzle action…' : 'Submitting local action…';
   render();
   try {
-    const result = await request;
+    let result = await request;
+    // A GM may stop/reset a live mechanism while a player input is arriving.
+    // Re-submit only an explicitly rejected intent, bounded to this same puzzle
+    // generation and current GM role; controller revision checks stay intact.
+    if(asHost&&['complete-puzzle','reset-puzzle','pause-puzzle','resume-puzzle'].includes(type)){
+      for(let retry=0;retry<3&&!result.accepted&&result.reason==='stale-revision';retry++){
+        if(result.snapshot.puzzleId!==puzzleId||adapter instanceof OwlbearAdapter&&(!adapter.gm||adapter.preview||adapter.commandContext!==commandContext))break;
+        await displaySnapshot(result.snapshot);const fresh=adapter.snapshot();if(fresh.puzzleId!==puzzleId)break;
+        result=await adapter.request({...command,expectedRevision:fresh.revision},asHost);
+      }
+    }
     if(!result.accepted)inputEpoch++;
     await displaySnapshot(result.snapshot, result.accepted && type === 'rotate' ? tileIndex : undefined);
+    if(!result.accepted&&snapshot.puzzleType==='challenge')challengeView.report(rejectionMessages[result.reason]);
     if (result.accepted && type === 'return-piece' && pieceId)
       element<HTMLSelectElement>('inventory').value = pieceId;
     feedback.textContent = result.accepted
@@ -502,6 +515,7 @@ async function send(type: Command['type'], tileIndex?: number, mode?: 'turns' | 
   } catch (error) {
     inputEpoch++;
     feedback.textContent = error instanceof Error ? error.message : 'The action could not complete.';
+    if(snapshot.puzzleType==='challenge')challengeView.report(feedback.textContent);
   }
   render();
 }

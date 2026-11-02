@@ -90,3 +90,7 @@ test('GM resetting a moving snake starts a fresh attempt waiting for input',asyn
   await creator(page,'worm');await rule(page,'walls',0);await rule(page,'speed',1);await publish(page);await focusSurface(page);await page.keyboard.press('ArrowRight');await expect.poll(async()=>(await saved(page)).state.challenge!.values[0]).toBe(27);
   await page.locator('#reset-puzzle').click();await expect.poll(async()=>(await saved(page)).state.challenge!.attempt).toBe(1);await page.waitForTimeout(1200);expect((await saved(page)).state.challenge!.values[0]).toBe(26);
 });
+test('GM Solve waits for the final held-stream acknowledgement',async({page})=>{
+  await creator(page,'sequence');await publish(page);await expect(page.locator('#complete-puzzle')).toBeEnabled();await page.evaluate(()=>{const original=window.setTimeout.bind(window);window.setTimeout=((handler:TimerHandler,delay?:number,...args:unknown[])=>original(handler,delay===90?600:delay,...args)) as typeof setTimeout;});
+  await focusSurface(page);await page.keyboard.down('Space');await expect(page.locator('#complete-puzzle')).toBeDisabled();await page.keyboard.up('Space');await page.locator('#complete-puzzle').click();await expect(page.locator('#success')).toBeVisible();
+});

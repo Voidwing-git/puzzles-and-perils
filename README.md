@@ -76,7 +76,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.12.0 is a hosted-testing candidate. Live multi-device/table
+Version 0.12.1 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

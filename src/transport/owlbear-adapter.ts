@@ -40,6 +40,7 @@ export class OwlbearAdapter {
   get viewer() { return this.#rehearsal ? this.#previewActor : this.#viewer; }
   get freePlayAllowed(){return this.preview?this.snapshot().participants.some(p=>p.id===this.viewer):this.#ready&&!!this.#viewer;}
   get pending() { return this.#pending; }
+  get commandContext(){return this.#rehearsal?`preview:${this.#previewActor}:${this.#rehearsal.snapshot().puzzleId}`:this.#shared?.generation??'waiting';}
   get gm() { return this.#gm; }
   get ready() { return this.#ready; }
   get finalized() { return !!this.#shared; }
