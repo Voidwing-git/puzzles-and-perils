@@ -87,6 +87,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     button('Open puzzle A', () => trigger(gm, 'open', 'token-a'));
     button('Open puzzle B', () => trigger(gm, 'open', 'token-b'));
     button('Player opens puzzle A', () => trigger(player, 'open', 'token-a'));
+    button('Player opens puzzle B', () => trigger(player, 'open', 'token-b'));
     button('Double-click puzzle B with puzzle tool', () => {
       const bg = frames.find(f => f.frame.id === 'gm-background')!;
       send(bg.frame, 'OBR_TOOL_MODE_EVENT_TOOL_DOUBLE_CLICK', { id: ENTRY+'/mode', context: {}, event: { target: tokens[1], pointerPosition: {x:0,y:0} } });
@@ -128,18 +129,30 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       else if (id === 'OBR_SCENE_ITEMS_GET_ALL_ITEMS') {document.body.dataset.allItemReads=String(Number(document.body.dataset.allItemReads??0)+1);response = {items:tokens};}
       else if (id === 'OBR_SCENE_ITEMS_GET_ITEMS') response={items:tokens.filter(t=>data.ids.includes(t.id))};
       else if (id === 'OBR_SCENE_ITEMS_UPDATE_ITEMS') {
+        const failure=document.body.dataset.failNextWrite;
+        if(failure){delete document.body.dataset.failNextWrite;document.body.dataset.failedWrite=failure;}
+        if(failure==='before'){
+          send(source.frame,`${id}_ERROR${nonce}`,'Simulated write acknowledgment failure');return;
+        }
         for (const update of data.updates) Object.assign(tokens.find(t=>t.id===update.id)!, update);
         frames.forEach(f=>send(f.frame,'OBR_SCENE_ITEMS_EVENT_CHANGE',{items:tokens}));
         const output = document.getElementById('state') ?? document.body.appendChild(Object.assign(document.createElement('pre'), {id:'state'}));
         output.textContent = JSON.stringify(tokens.map(t=>({id:t.id, metadata:t.metadata})));
+        if(failure==='after'){
+          send(source.frame,`${id}_ERROR${nonce}`,'Simulated write acknowledgment failure');return;
+        }
       } else if (id === 'OBR_CONTEXT_MENU_CREATE') {
         if (source.peer.role === 'GM' && data.id === ENTRY+'/attach')
           for (const name of ['Make puzzle A','Make puzzle B']) buttons.get(name)!.disabled = false;
         if (data.id === ENTRY+'/open') {
           if (source.peer.role === 'GM') for (const name of ['Open puzzle A','Open puzzle B']) buttons.get(name)!.disabled = false;
-          else buttons.get('Player opens puzzle A')!.disabled = false;
+          else for(const name of ['Player opens puzzle A','Player opens puzzle B'])buttons.get(name)!.disabled = false;
         }
       } else if (id === 'OBR_TOOL_MODE_CREATE') buttons.get('Double-click puzzle B with puzzle tool')!.disabled = false;
+      else if(id==='OBR_TOOL_CREATE'&&document.body.dataset.failToolRegistration==='true'){
+        delete document.body.dataset.failToolRegistration;
+        send(source.frame,`${id}_ERROR${nonce}`,'Simulated tool registration failure');return;
+      }
       else if (id === 'OBR_POPOVER_OPEN') {
         const frame = mount(`${source.peer.id}-window`, data.url, source.peer);
         frame.width = String(data.width); frame.height = String(data.height);
@@ -147,6 +160,9 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       }
       else if (id === 'OBR_BROADCAST_SUBSCRIBE') source.channel = data.channel;
       else if (id === 'OBR_BROADCAST_SEND_MESSAGE') {
+        if(document.body.dataset.expireNextRequest==='true'&&data.data?.command?.type==='rotate'){
+          delete document.body.dataset.expireNextRequest;data.data.expiresAt=Date.now()-1;
+        }
         const log = document.getElementById('messages') ?? document.body.appendChild(Object.assign(document.createElement('pre'), {id:'messages'}));
         log.textContent += JSON.stringify(data.data) + '\n';
         frames.filter(f=>f.channel===data.channel && f.frame.isConnected).forEach(f=>send(f.frame,`OBR_BROADCAST_MESSAGE_${data.channel}`,{data:data.data,connectionId:source.peer.connectionId}));
@@ -269,6 +285,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await gm.locator('#publish-draft').click();
   await expect(player.locator('#board button')).toHaveCount(16);
   // Reload gives the GM a different connection while metadata retains its owner.
+  await page.locator('body').evaluate(body=>{body.dataset.failToolRegistration='true';});
   await hostAction('Reconnect GM controller');
   await hostAction('Open puzzle A');
   await expect(gm.locator('#edit-puzzle')).toBeVisible();
@@ -471,7 +488,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     const y=cube?box.y+box.height/2+(Math.floor(local/3)-1)*box.height*.22+box.height*.02:box.y+box.height/2;
     await page.locator('body').evaluate(body=>{body.dataset.holdWriteAck='true';});
     await page.mouse.dblclick(x,y,{delay:20});
-    await expect(gm.locator('.demo-banner')).toContainText('private preparation missing');
+    await expect(gm.locator('.demo-banner')).toContainText('controller connected');
     await expect(gm.locator('#rotate')).toHaveAttribute('aria-busy','true');
     await page.mouse.dblclick(x,y,{delay:20});
     await page.evaluate(()=>document.dispatchEvent(new Event('release-write-acks')));
@@ -542,5 +559,41 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   const clockDeadline=async()=>(JSON.parse(await page.locator('#state').innerText())[0].metadata['com.arcane-pipes/shared-v1'] as {puzzle:PublicPuzzle}).puzzle.challenge!.clock!.deadline;
   expect(await clockDeadline()).toBe(0);
   await page.locator('#player-window').evaluate((frame:HTMLIFrameElement,src)=>{frame.src=src!;},playerSource);await expect(player.locator('#challenge-game')).toBeVisible();await expect.poll(clockDeadline).toBeGreaterThan(0);
+  // Consecutive token puzzles recover independently after both possible write
+  // outcomes. Reopening only the player's popup cannot reset a background lock.
+  for(const token of ['A','B']){
+    await hostAction(`Open puzzle ${token}`);
+    await gm.locator('#open-setup').click();await gm.locator('#choose-pipes').click();
+    await gm.locator('#setup-kind').selectOption('relay');await gm.locator('#draft-free').check();await gm.locator('#publish-draft').click();
+    await hostAction(`Player opens puzzle ${token}`);
+    const revision=async()=>Number((await player.locator('#revision').innerText()).replace('Revision ',''));
+    if(token==='A'){
+      const before=await revision();
+      await page.locator('body').evaluate(body=>{body.dataset.expireNextRequest='true';});
+      await player.locator('[data-index="6"]').dblclick();
+      await expect(player.locator('.demo-banner')).toContainText('Request timing differs');
+      expect(await revision()).toBe(before);
+      await player.locator('[data-index="6"]').dblclick();await expect.poll(revision).toBe(before+1);
+    }
+    for(const outcome of ['after','before']){
+      await expect(player.locator('[data-index="6"]')).toBeEnabled();
+      const before=await revision();
+      await page.locator('body').evaluate((body,outcome)=>{delete body.dataset.failedWrite;body.dataset.failNextWrite=outcome;},outcome);
+      await player.locator('[data-index="6"]').dblclick();
+      await expect(page.locator('body')).toHaveAttribute('data-failed-write',outcome);
+      if(outcome==='before')await expect(player.locator('.demo-banner')).toContainText('could not confirm the save');
+      else await expect.poll(revision).toBe(before+1);
+      if(outcome==='before'){
+        // A missing durable receipt cannot prove that a timed-out write will
+        // never arrive. Require an explicit GM save rather than replaying it.
+        await gm.locator('#edit-puzzle').click();await gm.locator('#publish-draft').click();
+      }
+      await hostAction(`Player opens puzzle ${token}`);
+      await player.locator('[data-index="6"]').dblclick();
+      await expect.poll(revision).toBe(before+(outcome==='after'?2:1));
+      await expect(player.locator('#rotate')).toBeEnabled();
+      await expect(gm.locator('#revision')).toHaveText(`Revision ${before+(outcome==='after'?2:1)}`);
+    }
+  }
   expect(errors).toEqual([]);
 });

@@ -80,7 +80,7 @@ test('size overflow rejects before write and uncertain writes freeze subsequent 
   u.fail();
   await assert.rejects(u.controller.submit(u.request('uncertain'), 'a1'), /uncertain/);
   assert.equal(u.controller.uncertain, true);
-  await u.controller.submit(u.request('later'), 'a1');
+  await assert.rejects(u.controller.submit(u.request('later'), 'a1'), /save outcome is unresolved/);
   assert.equal(u.writes(), 2);
   assert.equal(u.shared().puzzle.revision, 0);
 });

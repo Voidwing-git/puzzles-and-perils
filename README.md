@@ -7,6 +7,13 @@ seven styles of hacking console.
 Includes GM authoring, turns/free play, private backups, undo and pause/resume.
 Local demonstration names are fictional.
 
+Shared play currently requires the GM's Owlbear room tab to stay open; the GM
+may close the puzzle popup. That tab coordinates moves and keeps private puzzle
+answers. Version 0.12.2 reconciles interrupted saves when the staged private save
+exactly matches the published board. Unresolved outcomes require an explicit GM
+save or private-backup restore; rotations are never blindly replayed. Controller
+failures now reach the requesting window with recovery guidance.
+
 Lock picking offers Novice (DC 5), Apprentice (DC 10), Adept (DC 15), Expert
 (DC 20) and Master (DC 25). Move the mouse over the lock to aim, then hold the
 left mouse button to turn. Arrow keys with Space and a separate Turn control
@@ -76,7 +83,7 @@ The GM's **Event history** shows recent actions and is included in private backu
 
 ## Release status
 
-Version 0.12.1 is a hosted-testing candidate. Live multi-device/table
+Version 0.12.2 is a hosted-testing candidate. Live multi-device/table
 qualification is still pending; a successful deployment alone does not qualify
 the multiplayer experience.
 

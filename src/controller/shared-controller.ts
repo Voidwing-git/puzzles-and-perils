@@ -30,7 +30,7 @@ export class SharedController {
   }
   async #handle(data: unknown, sender: string) {
       const request = parseRequest(data);
-      if (!request || (this.#uncertain&&request.command.type!=='restore-draft')) return;
+      if (!request) return;
       if (request.tokenId !== this.tokenId) return;
       if (request.expiresAt <= Date.now() || request.expiresAt > Date.now() + 10000) return;
       const peers = await this.io.peers();
@@ -47,6 +47,24 @@ export class SharedController {
       const publisher = (list: Peer[]) => list.find(p => p.connectionId === sender);
       if (publishing ? publisher(gms)?.connectionId !== this.connection :
         gms.length !== 1 || gms[0].connectionId !== this.connection) return;
+      // A write can reach Owlbear even when its acknowledgment is lost. Compare
+      // durable public state with the staged and committed private saves before
+      // accepting another action. Never replay the interrupted action.
+      if (request.command.type!=='restore-draft' && shared?.owner===this.connection && typeof localStorage!=='undefined') {
+        const key=`${this.scope}:${this.tokenId??'room'}`;
+        const staged=readValidatedPrivate(`${key}:staged`);
+        if(staged){
+          const canonical=(value:unknown):string=>JSON.stringify(value,(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
+          const matches=(p:import('../core/state.ts').PrivatePreparation|null)=>!!p&&canonical(projectPublic(p))===canonical(shared!.puzzle);
+          if(matches(staged)){savePrivate(key,staged);discardPrivate(`${key}:staged`);this.#uncertain=false;}
+          else if(!publishing){
+            this.#uncertain=true;
+            if(matches(readValidatedPrivate(key)))throw new Error('Controller save outcome is unresolved. The GM must reopen this puzzle and Save changes to reconnect.');
+            throw new Error('Controller recovery needs a private backup: saved board does not match either private save.');
+          }
+        }
+      }
+      if(this.#uncertain&&!publishing)throw new Error('Controller save outcome is unresolved. The GM must reopen the room and use Save / recovery.');
       const roster = peers.filter(p => p.role === 'PLAYER')
         .filter((p, i, all) => all.findIndex(q => q.id === p.id) === i)
         .map(p => ({ id: p.id, name: p.name }));

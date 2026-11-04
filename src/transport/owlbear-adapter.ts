@@ -3,7 +3,7 @@ import { createFixture } from '../core/fixtures.ts';
 import { projectPublic } from '../core/projection.ts';
 import type { Command, PublicPuzzle } from '../core/state.ts';
 import type { Rejection } from '../core/commands.ts';
-import { CHANNEL, KEY, TOKEN_KEY } from './protocol.ts';
+import { CHANNEL, STATUS_CHANNEL, KEY, TOKEN_KEY } from './protocol.ts';
 import type { Shared, Request } from './protocol.ts';
 import type { FixtureId } from '../core/fixtures.ts';
 import { tokenMetadata } from './token-entry.ts';
@@ -21,6 +21,9 @@ export class OwlbearAdapter {
   #gm = false;
   #available = false;
   #uncertain = false;
+  #failure?:{id:string;message:string;uncertain:boolean};
+  #requestId='';
+  #currentFailure(){return this.#failure;}
   #ready = false;
   #listeners: (() => void)[] = [];
   #tokenId = new URLSearchParams(location.search).get('token') ?? undefined;
@@ -45,10 +48,19 @@ export class OwlbearAdapter {
   get ready() { return this.#ready; }
   get finalized() { return !!this.#shared; }
   get privateScope() { return `${OBR.room.id}:${this.#tokenId ?? 'room'}`; }
-  privatePreparation() {
+  privatePreparation(includeStaged=true) {
     if (!this.#gm || this.preview) return null;
     let preparation:PrivatePreparation|null;
-    try{preparation=readValidatedPrivate(this.privateScope);}catch{return null;}
+    try{
+      preparation=readValidatedPrivate(this.privateScope);
+      if(includeStaged&&this.#shared&&(!preparation||preparation.state.puzzleId!==this.#shared.puzzle.puzzleId||preparation.state.revision!==this.#shared.puzzle.revision)){
+        const staged=readValidatedPrivate(`${this.privateScope}:staged`);
+        // A pending private commit may be used only when its complete public
+        // projection matches. The serialized background performs the commit.
+        const canonical=(value:unknown):string=>JSON.stringify(value,(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
+        if(staged&&canonical(projectPublic(staged))===canonical(this.#shared.puzzle))preparation=staged;
+      }
+    }catch{return null;}
     if (!preparation || !this.#shared || preparation.state.puzzleId !== this.#shared.puzzle.puzzleId||preparation.state.revision!==this.#shared.puzzle.revision) return null;
     // Public metadata is authoritative for current rotations/inventory.
     preparation.state = structuredClone(this.#shared.puzzle);
@@ -121,7 +133,7 @@ export class OwlbearAdapter {
       if (this.#gm) gms.push(this.#connection);
       const privateReady=!this.#gm||!this.#shared||!!this.#shared.fixture||!!this.privatePreparation();
       this.#available = this.#readOkay && privateReady && !this.#uncertain && this.#shared?.version === 1 && gms.length === 1 && gms[0] === this.#shared.owner;
-      this.status = this.#uncertain ? 'PAUSED: acknowledgment uncertain. Reopen the action window to reconcile.' :
+      this.status = this.#uncertain ? 'Controller acknowledgment unresolved. The GM must reload the Owlbear room, then reopen this puzzle.' :
         !this.#shared ? 'The GM is setting up this puzzle. Players can open it after finalization.' :
         !privateReady?'PAUSED: private preparation missing. Import a private backup from Save / recovery.':
         this.#available ? 'Owlbear shared board · controller connected' :
@@ -152,6 +164,12 @@ export class OwlbearAdapter {
       return work;
     };
     this.#refresh=refresh;
+    OBR.broadcast.onMessage(STATUS_CHANNEL,event=>{
+      const value=event.data as {id?:unknown;tokenId?:unknown;message?:unknown;uncertain?:unknown}|null;
+      if(!value||event.connectionId!==this.#shared?.owner||value.id!==this.#requestId||value.tokenId!==this.#tokenId||typeof value.message!=='string'||value.message.length>240||typeof value.uncertain!=='boolean')return;
+      this.#failure={id:this.#requestId,message:value.message,uncertain:value.uncertain};
+      this.#changes.notify();
+    });
     if (this.#tokenId) {
       OBR.scene.items.onChange(items => {
         const token=items.find(item=>item.id===this.#tokenId);
@@ -210,6 +228,7 @@ export class OwlbearAdapter {
       if(!gmSave&&gms.length>1)throw new Error('More than one GM connection is open. Close the extra GM room tabs before playing. GM puzzle updates can still be saved.');
       if(!this.#shared||(!this.#available&&!gmSave))throw new Error('The original GM controller is disconnected. Open GM view and explicitly save the puzzle to reconnect. Your edits are kept privately.');
       const request:Request={id:crypto.randomUUID(),generation:this.#shared.generation,expiresAt:Date.now()+6000,tokenId:this.#tokenId,command};
+      this.#requestId=request.id;this.#failure=undefined;
       // Retry the same ID, never a fresh rotation. Durable metadata is the ack.
       for (let attempt = 0; attempt < 3; attempt++) {
         sent=true;
@@ -226,7 +245,7 @@ export class OwlbearAdapter {
               // its private save. Keep this action pending through that gap so
               // the UI can buffer the next gesture instead of dropping it.
               const commitDeadline=Date.now()+2000;
-              while(!this.privatePreparation()){
+              while(!this.privatePreparation(false)){
                 const commitVersion=this.#changes.version;
                 if(Date.now()>=commitDeadline)throw new Error('Private save acknowledgment unavailable. Reopen the puzzle to reconcile.');
                 await this.#changes.wait(commitVersion,Math.min(100,commitDeadline-Date.now()));
@@ -237,17 +256,24 @@ export class OwlbearAdapter {
               ? { accepted: true as const, snapshot: this.snapshot() }
               : { accepted: false as const, snapshot: this.snapshot(), reason: receipt.reason as Rejection };
           }
+          const failure=this.#currentFailure();
+          if(failure?.id===request.id){
+            this.#uncertain=failure.uncertain;
+            this.status=failure.message;
+            if(!failure.uncertain)sent=false;
+            throw new Error(this.status);
+          }
           await this.#changes.wait(version,Math.max(0,Math.min(200,deadline-Date.now())));
         }
       }
       this.#available = false;
       this.#uncertain = true;
-      this.status = 'PAUSED: acknowledgment uncertain. Reopen the action window to reconcile before another move.';
+      this.status = 'No controller acknowledgment. The GM must reload the Owlbear room, then reopen this puzzle to reconcile.';
       throw new Error(this.status);
     } catch (error) {
-      this.#available = false;
-      if(sent){this.#uncertain=true;this.status='PAUSED: request outcome uncertain. Reopen the action window to reconcile.';}
+      if(!this.#failure||this.#failure.uncertain)this.#available = false;
+      if(sent){this.#uncertain=true;this.status=this.#failure?.message??'No controller acknowledgment. The GM must reload the Owlbear room, then reopen this puzzle to reconcile.';}
       throw error;
-    } finally { this.#pending = false; this.#notify();void this.#syncDefaultRoster(); }
+    } finally { this.#requestId='';this.#pending = false; this.#notify();void this.#syncDefaultRoster(); }
   }
 }

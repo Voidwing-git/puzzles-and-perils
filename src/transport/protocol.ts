@@ -4,6 +4,8 @@ import type { FixtureId } from '../core/fixtures.ts';
 
 export const KEY = 'com.arcane-pipes/shared-v1';
 export const CHANNEL = 'com.arcane-pipes/requests-v1';
+export const STATUS_CHANNEL = 'com.arcane-pipes/request-status-v1';
+export interface RequestFailure { id:string; tokenId?:string; message:string; uncertain:boolean }
 export const TOKEN_KEY = 'com.arcane-pipes/token-v1';
 export interface Request { id: string; generation: string; expiresAt: number; command: Command; tokenId?: string; fixture?: FixtureId }
 export interface Receipt { id: string; connection: string; revision: number; accepted: boolean; reason?: string }
