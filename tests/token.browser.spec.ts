@@ -5,7 +5,7 @@ import type { PrivatePreparation,PublicPuzzle } from '../src/core/state.ts';
 // Local SDK host double. Public UI routes are real compiled code; Owlbear's
 // networking/identity/storage guarantees still require the real-room gate.
 test('token context entry, solo GM, private player rehearsal and isolated reset/complete', async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(180000);
   page.setDefaultTimeout(15000);
   // The host double keeps both clients onscreen to avoid offscreen iframe
   // timer/animation throttling. Each product popup retains its normal size.
@@ -185,7 +185,12 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     const frame=page.locator(name.startsWith('Player opens')?'#player-window':'#gm-window');
     const previous=opens&&await frame.count()?await frame.elementHandle():null;
     const button=page.getByRole('button',{name,exact:true});await expect(button).toBeEnabled();await button.press('Enter');
-    if(opens){if(previous)await expect.poll(()=>previous.evaluate(el=>el.isConnected)).toBe(false);await expect(frame).toBeVisible();}
+    if(opens){
+      if(previous)await expect.poll(()=>previous.evaluate(el=>el.isConnected)).toBe(false);
+      await expect(frame).toBeVisible();
+      const view=page.frameLocator(name.startsWith('Player opens')?'#player-window':'#gm-window');
+      await expect(view.locator('.demo-banner')).toContainText(/controller connected|GM is setting up|private preparation missing|multiple GM|automatic reconnection|waiting for the GM room/);
+    }
   };
   await hostAction('Make puzzle A');await gm.locator('#choose-pipes').click();
   await expect(gm.getByRole('heading', {name:'Make a puzzle',exact:true})).toBeVisible();
@@ -577,7 +582,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   // outcomes. Reopening only the player's popup cannot reset a background lock.
   for(const token of ['A','B']){
     await hostAction(`Open puzzle ${token}`);
-    await gm.locator('#open-setup').click();await gm.locator('#choose-pipes').click();
+    await gm.locator('#open-setup').press('Enter');await expect(gm.locator('#puzzle-picker-title')).toBeVisible();await gm.locator('#choose-pipes').click();
     await gm.locator('#setup-kind').selectOption('relay');await gm.locator('#draft-free').check();await gm.locator('#publish-draft').click();
     await hostAction(`Player opens puzzle ${token}`);
     const revision=async()=>Number((await player.locator('#revision').innerText()).replace('Revision ',''));
