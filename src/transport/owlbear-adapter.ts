@@ -138,8 +138,8 @@ export class OwlbearAdapter {
         !privateReady?'PAUSED: private preparation missing. Import a private backup from Save / recovery.':
         this.#available ? 'Owlbear shared board · controller connected' :
           gms.length > 1 ? 'Play paused: multiple GM connections. GM puzzle updates can still be saved.' :
-          this.#gm ? 'Previous controller disconnected. Explicitly Save changes to reconnect this puzzle.' :
-          'PAUSED: waiting for the GM to reconnect and save this puzzle.';
+          this.#gm ? 'Waiting for automatic reconnection. If this persists, check Save / recovery for the private backup.' :
+          'PAUSED: waiting for the GM room to reconnect. The GM can check Save / recovery if this persists.';
       this.#notify();
       }
       catch (error) {
@@ -226,7 +226,7 @@ export class OwlbearAdapter {
       const gmSave=(command.type==='publish-draft'||command.type==='restore-draft')&&this.#gm;
       this.#available=this.#readOkay&&this.#shared?.version===1&&gms.length===1&&gms[0]===this.#shared.owner;
       if(!gmSave&&gms.length>1)throw new Error('More than one GM connection is open. Close the extra GM room tabs before playing. GM puzzle updates can still be saved.');
-      if(!this.#shared||(!this.#available&&!gmSave))throw new Error('The original GM controller is disconnected. Open GM view and explicitly save the puzzle to reconnect. Your edits are kept privately.');
+      if(!this.#shared||(!this.#available&&!gmSave))throw new Error('The GM controller is reconnecting or its private save is unavailable. Reload the GM room; if this persists, check Save / recovery.');
       const request:Request={id:crypto.randomUUID(),generation:this.#shared.generation,expiresAt:Date.now()+6000,tokenId:this.#tokenId,command};
       this.#requestId=request.id;this.#failure=undefined;
       // Retry the same ID, never a fresh rotation. Durable metadata is the ack.

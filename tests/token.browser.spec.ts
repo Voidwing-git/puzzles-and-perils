@@ -158,7 +158,10 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
         frame.width = String(data.width); frame.height = String(data.height);
         frame.dataset.popoverWidth = String(data.width); frame.dataset.popoverHeight = String(data.height);
       }
-      else if (id === 'OBR_BROADCAST_SUBSCRIBE') source.channel = data.channel;
+      else if (id === 'OBR_BROADCAST_SUBSCRIBE') {
+        source.channel = data.channel;
+        if(source.peer.role==='GM'&&data.channel==='com.arcane-pipes/requests-v1')document.body.dataset.controllerSubscription=source.peer.connectionId;
+      }
       else if (id === 'OBR_BROADCAST_SEND_MESSAGE') {
         if(document.body.dataset.expireNextRequest==='true'&&data.data?.command?.type==='rotate'){
           delete document.body.dataset.expireNextRequest;data.data.expiresAt=Date.now()-1;
@@ -285,10 +288,21 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await gm.locator('#publish-draft').click();
   await expect(player.locator('#board button')).toHaveCount(16);
   // Reload gives the GM a different connection while metadata retains its owner.
+  const beforeReconnect=JSON.parse(await page.locator('#state').innerText());
   await page.locator('body').evaluate(body=>{body.dataset.failToolRegistration='true';});
   await hostAction('Reconnect GM controller');
+  await expect.poll(async()=>JSON.parse(await page.locator('#state').innerText()).every((t:any)=>t.metadata['com.arcane-pipes/shared-v1'].owner.startsWith('g-reconnected'))).toBe(true);
+  const afterReconnect=JSON.parse(await page.locator('#state').innerText());
+  for(let i=0;i<beforeReconnect.length;i++){
+    expect(afterReconnect[i].metadata['com.arcane-pipes/shared-v1'].puzzle).toEqual(beforeReconnect[i].metadata['com.arcane-pipes/shared-v1'].puzzle);
+    expect(afterReconnect[i].metadata['com.arcane-pipes/shared-v1'].generation).not.toBe(beforeReconnect[i].metadata['com.arcane-pipes/shared-v1'].generation);
+  }
   await hostAction('Open puzzle A');
   await expect(gm.locator('#edit-puzzle')).toBeVisible();
+  await expect(player.locator('.demo-banner')).toContainText('controller connected');
+  const readyTile=player.locator('#board button.occupied:not(.source):not(.target)').first();
+  await readyTile.click();await expect(player.locator('#rotate')).toBeEnabled();await player.locator('#rotate').click();
+  await expect(player.locator('#rotate')).toHaveAttribute('aria-busy','false');
   // Real embedded browsers may suppress confirm(). Save must still publish.
   await gm.locator('body').evaluate(() => { window.confirm = () => false; });
   await gm.locator('#edit-puzzle').click();
@@ -598,5 +612,13 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       await expect(gm.locator('#revision')).toHaveText(`Revision ${before+(outcome==='after'?2:1)}`);
     }
   }
+  const beforeSceneReconnect=JSON.parse(await page.locator('#state').innerText());
+  await hostAction('Toggle test scene');await hostAction('Reconnect GM controller');
+  await expect(page.locator('body')).toHaveAttribute('data-controller-subscription','g-reconnected-2');
+  expect(JSON.parse(await page.locator('#state').innerText())).toEqual(beforeSceneReconnect);
+  await hostAction('Toggle test scene');
+  await expect.poll(async()=>JSON.parse(await page.locator('#state').innerText()).every((t:any)=>t.metadata['com.arcane-pipes/shared-v1'].owner==='g-reconnected-2')).toBe(true);
+  const afterSceneReconnect=JSON.parse(await page.locator('#state').innerText());
+  for(let i=0;i<beforeSceneReconnect.length;i++)expect(afterSceneReconnect[i].metadata['com.arcane-pipes/shared-v1'].puzzle).toEqual(beforeSceneReconnect[i].metadata['com.arcane-pipes/shared-v1'].puzzle);
   expect(errors).toEqual([]);
 });

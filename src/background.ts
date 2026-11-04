@@ -1,7 +1,7 @@
 import './security/host-guard.ts';
 import OBR from '@owlbear-rodeo/sdk';
 import { SharedController } from './controller/shared-controller.ts';
-import { CHANNEL, STATUS_CHANNEL, parseRequest } from './transport/protocol.ts';
+import { CHANNEL, STATUS_CHANNEL, KEY, TOKEN_KEY, parseRequest } from './transport/protocol.ts';
 import { registerTokenEntry, tokenMetadata, writeTokenMetadata } from './transport/token-entry.ts';
 
 OBR.onReady(async () => {
@@ -25,7 +25,31 @@ OBR.onReady(async () => {
       write: update => OBR.room.setMetadata(update),
     }, undefined, OBR.room.id);
     const tokenControllers = new Map<string, SharedController>();
-    OBR.scene.onReadyChange(() => tokenControllers.clear());
+    const forToken=(tokenId:string)=>{
+      if(!tokenControllers.has(tokenId))tokenControllers.set(tokenId,new SharedController(connection,{
+        peers,read:()=>tokenMetadata(tokenId,false),write:update=>writeTokenMetadata(tokenId,update),
+      },tokenId,OBR.room.id));
+      return tokenControllers.get(tokenId)!;
+    };
+    let reconnecting:Promise<void>|undefined,dirty=false;
+    const reconnectAll=()=>{
+      if(reconnecting){dirty=true;return;}
+      reconnecting=(async()=>{
+        const party=await peers();if(party.filter(p=>p.role==='GM').length!==1||!party.some(p=>p.role==='GM'&&p.connectionId===connection))return;
+        let restored=0,skipped=0;
+        const attempt=async(target:SharedController)=>{
+          try{const result=await target.reconnect();if(result==='reconnected')restored++;else if(result==='skipped')skipped++;}catch{skipped++;}
+        };
+        const room=await OBR.room.getMetadata();if(room[KEY])await attempt(controller);
+        if(await OBR.scene.isReady()){
+          const tokens=(await OBR.scene.items.getItems()).filter(item=>item.metadata[TOKEN_KEY]===true&&item.metadata[KEY]);
+          for(const token of tokens)await attempt(forToken(token.id));
+        }
+        if(skipped)await OBR.notification.show(`Reconnected ${restored} puzzles. ${skipped} need a matching private save in Save / recovery.`,'WARNING');
+      })().catch(async()=>{await OBR.notification.show('Puzzle reconnection could not finish. Reload the GM room to retry.','ERROR');}).finally(()=>{reconnecting=undefined;if(dirty){dirty=false;reconnectAll();}});
+    };
+    OBR.scene.onReadyChange(()=>reconnectAll());
+    OBR.party.onChange(()=>reconnectAll());
     OBR.broadcast.onMessage(CHANNEL, event => {
       const request = parseRequest(event.data);
       if (!request) return;
@@ -36,12 +60,7 @@ OBR.onReady(async () => {
       let target = controller;
       if (request.tokenId) {
         const tokenId = request.tokenId;
-        if (!tokenControllers.has(tokenId)) tokenControllers.set(tokenId, new SharedController(connection, {
-          peers,
-          read: () => tokenMetadata(tokenId, false),
-          write: update => writeTokenMetadata(tokenId, update),
-        }, tokenId, OBR.room.id));
-        target = tokenControllers.get(tokenId)!;
+        target = forToken(tokenId);
       }
       void target.submit(event.data, event.connectionId).catch(async error => {
         // Only fixed application messages are sent; no private preparation or
@@ -51,6 +70,7 @@ OBR.onReady(async () => {
         await OBR.notification.show(error instanceof Error ? error.message : 'Controller paused.', 'ERROR');
       });
     });
+    reconnectAll();
     await new Promise<void>(() => {});
   });
 });

@@ -5,6 +5,10 @@ import {createFixture} from '../src/core/fixtures.ts';
 import {savePrivate,readPrivate,privateStorageKey} from '../src/core/private-store.ts';
 import {KEY} from '../src/transport/protocol.ts';
 import type {Shared,Request} from '../src/transport/protocol.ts';
+import {projectPublic} from '../src/core/projection.ts';
+import {createLock} from '../src/core/lockpick.ts';
+import {createRingDoor} from '../src/core/ring-door.ts';
+import {createChallenge} from '../src/core/challenges.ts';
 
 test('lost write acknowledgments reconcile each token without replay, including background restarts',async()=>{
  const previous=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),values=new Map<string,string>();
@@ -33,6 +37,38 @@ test('lost write acknowledgments reconcile each token without replay, including 
    assert.equal(values.has(privateStorageKey(`recovery:${tokenId}:staged`)),false);
    const count=writes;await controller.submit(interrupted,'p');assert.equal(writes,count);
    assert.equal(shared().puzzle.revision,revision+1,'old move cannot be applied twice or replayed after another revision');
+  }
+ }finally{if(previous)Object.defineProperty(globalThis,'localStorage',previous);else Reflect.deleteProperty(globalThis,'localStorage');}
+});
+
+test('automatic reconnect preserves complete puzzle progress and private baselines across puzzle types',async()=>{
+ const previous=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),values=new Map<string,string>();
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)}});
+ try{
+  for(const [i,draft] of [createFixture('broken-conduit','pipes'),createLock('adept','lock'),createRingDoor('door'),createChallenge('hex','hex')].entries()){
+    const tokenId=i?`token-${i}`:undefined,key=`auto:${tokenId??'room'}`;draft.state.revision=7;savePrivate(key,draft);
+    const puzzle=projectPublic(draft),original=structuredClone(draft);
+    let shared:Shared={version:1,owner:'old-gm',generation:'old-generation',puzzle,receipts:[{id:'old-request',connection:'p',revision:7,accepted:true}],...(tokenId?{tokenId}:{})};let writes=0;
+    const controller=new SharedController('new-gm',{peers:async()=>[{id:'gm',connectionId:'new-gm',role:'GM',name:'GM'}],read:async()=>({[KEY]:structuredClone(shared),other:'kept'}),write:async update=>{shared=update[KEY] as Shared;writes++;}},tokenId,'auto');
+    assert.equal(await controller.reconnect(),'reconnected');assert.equal(shared.owner,'new-gm');assert.notEqual(shared.generation,'old-generation');assert.deepEqual(shared.receipts,[]);
+    assert.deepEqual(shared.puzzle,puzzle);assert.deepEqual(readPrivate(key),original);
+    assert.equal(await controller.reconnect(),'current');assert.equal(writes,1);
+  }
+ }finally{if(previous)Object.defineProperty(globalThis,'localStorage',previous);else Reflect.deleteProperty(globalThis,'localStorage');}
+});
+
+test('automatic reconnect skips missing, mismatched, duplicated and multiply-owned puzzles without writing',async()=>{
+ const previous=Object.getOwnPropertyDescriptor(globalThis,'localStorage'),values=new Map<string,string>();
+ Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>values.set(k,v),removeItem:(k:string)=>values.delete(k)}});
+ try{
+  for(const failure of ['missing','mismatch','duplicate','multiple-gm','party-changed','metadata-changed','unlanded-stage']){
+    const draft=createFixture('relay',failure);if(failure!=='missing')savePrivate('guard:token',draft);
+    const shared:Shared={version:1,owner:'old',generation:'old-gen',tokenId:failure==='duplicate'?'original-token':'token',puzzle:projectPublic(draft),receipts:[]};
+    if(failure==='mismatch')shared.puzzle.revision++;
+    if(failure==='unlanded-stage'){const pending=structuredClone(draft);pending.state.revision++;savePrivate('guard:token:staged',pending);}else values.delete(privateStorageKey('guard:token:staged'));
+    let checks=0,reads=0;
+    const controller=new SharedController('new',{peers:async()=>{checks++;return [{id:'gm',connectionId:'new',role:'GM',name:'GM'},...((failure==='multiple-gm'||failure==='party-changed'&&checks>1)?[{id:'old',connectionId:'old',role:'GM' as const,name:'Other GM'}]:[])];},read:async()=>{reads++;return {[KEY]:{...shared,...(failure==='metadata-changed'&&reads>1?{generation:'changed'}:{})}};},write:async()=>assert.fail('Unsafe reconnect must not write')},'token','guard');
+    assert.equal(await controller.reconnect(),'skipped',failure);
   }
  }finally{if(previous)Object.defineProperty(globalThis,'localStorage',previous);else Reflect.deleteProperty(globalThis,'localStorage');}
 });

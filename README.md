@@ -13,6 +13,11 @@ answers. Version 0.12.2 reconciles interrupted saves when the staged private sav
 exactly matches the published board. Unresolved outcomes require an explicit GM
 save or private-backup restore; rotations are never blindly replayed. Controller
 failures now reach the requesting window with recovery guidance.
+Version 0.12.3 automatically reconnects matching saved puzzles when the GM room
+reloads and when a scene opens. The room puzzle and puzzle tokens in that scene
+keep their current progress, configuration, inventory and private undo baselines.
+Only one GM connection may reconnect automatically, using matching private saves
+in that browser. Missing or mismatched saves are reported for recovery.
 
 Lock picking offers Novice (DC 5), Apprentice (DC 10), Adept (DC 15), Expert
 (DC 20) and Master (DC 25). Move the mouse over the lock to aim, then hold the

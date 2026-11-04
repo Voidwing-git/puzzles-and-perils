@@ -23,6 +23,36 @@ export class SharedController {
   private scope: string;
   constructor(connection: string, io: RoomIO, tokenId?: string, scope = 'room') { this.connection = connection; this.io = io; this.tokenId = tokenId; this.scope = scope; }
   get uncertain() { return this.#uncertain; }
+  reconnect():Promise<'reconnected'|'current'|'skipped'>{
+    const job=this.#queue.then(()=>this.#reconnect());
+    this.#queue=job.then(()=>{},()=>{});return job;
+  }
+  async #reconnect():Promise<'reconnected'|'current'|'skipped'>{
+    const soleGM=(peers:Peer[])=>peers.filter(p=>p.role==='GM').length===1&&peers.some(p=>p.role==='GM'&&p.connectionId===this.connection);
+    if(!soleGM(await this.io.peers()))return 'skipped';
+    const metadata=await this.io.read(),shared=metadata[KEY] as Shared|undefined;
+    if(!shared||shared.version!==1||shared.tokenId!==this.tokenId)return 'skipped';
+    if(shared.owner===this.connection&&!this.#uncertain)return 'current';
+    if(this.#uncertain&&shared.owner!==this.connection)return 'skipped';
+    const canonical=(value:unknown):string=>JSON.stringify(value,(_key,v)=>v&&typeof v==='object'&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))):v);
+    const key=`${this.scope}:${this.tokenId??'room'}`;
+    const staged=readValidatedPrivate(`${key}:staged`);
+    const saved=staged??readValidatedPrivate(key);
+    // Ownership is renewed only for the exact board held privately in this
+    // browser. Reconnecting must not republish, reset, or edit puzzle progress.
+    if(!saved||canonical(projectPublic(saved))!==canonical(shared.puzzle))return 'skipped';
+    if(shared.owner===this.connection){
+      if(staged){savePrivate(key,staged);discardPrivate(`${key}:staged`);}
+      this.#uncertain=false;return 'current';
+    }
+    const latest=await this.io.read();
+    if(canonical(latest[KEY])!==canonical(shared)||!soleGM(await this.io.peers()))return 'skipped';
+    const next:Shared={...shared,owner:this.connection,generation:crypto.randomUUID(),receipts:[]};
+    assertFits(latest,next);
+    if(staged){savePrivate(key,staged);discardPrivate(`${key}:staged`);}
+    try{await this.io.write({[KEY]:next});}catch(error){this.#uncertain=true;throw error;}
+    this.#uncertain=false;return 'reconnected';
+  }
   submit(data: unknown, sender: string): Promise<void> {
     const job = this.#queue.then(() => this.#handle(data, sender));
     this.#queue = job.catch(() => {});
