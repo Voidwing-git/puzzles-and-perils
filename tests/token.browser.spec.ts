@@ -589,8 +589,11 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
         await gm.locator('#edit-puzzle').click();await gm.locator('#publish-draft').click();
       }
       await hostAction(`Player opens puzzle ${token}`);
-      await player.locator('[data-index="6"]').dblclick();
-      await expect.poll(revision).toBe(before+(outcome==='after'?2:1));
+      await expect(player.locator('.demo-banner')).toContainText('controller connected');
+      await player.locator('[data-index="6"]').click();
+      await expect(player.locator('#rotate')).toBeEnabled();
+      await player.locator('#rotate').click();
+      await expect.poll(revision,{message:`${token} ${outcome}-write recovery must acknowledge a new rotation`}).toBe(before+(outcome==='after'?2:1));
       await expect(player.locator('#rotate')).toBeEnabled();
       await expect(gm.locator('#revision')).toHaveText(`Revision ${before+(outcome==='after'?2:1)}`);
     }
