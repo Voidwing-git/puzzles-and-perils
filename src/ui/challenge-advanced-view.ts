@@ -10,9 +10,25 @@ export function mountAdvancedView(root:HTMLElement,request:(a:ChallengeAction)=>
   let state:ChallengeState|undefined,key='',revision=-1,play=false,busy=false,gm=false,disposed=false,sending=false,entered='',expiryPending=false,autoEnterAllowed=true,wasHidden=false;
   let phase=0,streamPosition=0,ring=0,held=false,heldAt=0,heldPhase=0,heldRing=0,direction=1,moving=false,boost=false,last=performance.now(),nextMove=0,nextCapture=0,raf=0;
   let mirrorX=50,mirrorY=50,editingIndex:number|undefined,knob:{input:HTMLInputElement;value:number;x:number;y:number}|undefined;
+  const pendingTuners=new Map<number,number>();
   const queue:{action:ChallengeAction;key:string;attempt:number}[]=[],rotations=new Map<number,{mod:number;angle:number}>();
   function allowed(){return !!state&&play&&!state.opened&&!state.failed;}
-  async function pump(){if(sending||disposed||busy||!queue.length)return;sending=true;const item=queue.shift()!;try{if(item.key===key&&item.attempt===state?.attempt)await request(item.action);}finally{sending=false;if(queue.length)void pump();}}
+  async function pump(){
+    if(sending||disposed||busy||!queue.length)return;
+    sending=true;const item=queue.shift()!;
+    try{if(item.key===key&&item.attempt===state?.attempt)await request(item.action);}
+    finally{
+      const action=item.action;
+      if(item.key===key&&item.attempt===state?.attempt&&action.op==='set'&&pendingTuners.get(action.index!)===action.value){
+        pendingTuners.delete(action.index!);
+        const input=surface.querySelector<HTMLInputElement>(`[data-dial="${action.index}"]`);
+        if(input&&editingIndex!==action.index&&knob?.input!==input){
+          input.value=String(state!.values[action.index!]);input.dispatchEvent(new Event('input',{bubbles:true}));
+        }
+      }
+      sending=false;if(queue.length)void pump();
+    }
+  }
   function send(action:ChallengeAction){if(!state||!allowed()&&!['enter','expire','retry'].includes(action.op))return;if(queue.length>32)return;queue.push({action,key,attempt:state.attempt!});void pump();}
   function stop(){held=false;heldAt=0;boost=false;moving=false;knob=undefined;}
   function positions(){if(!state)return;surface.querySelector('[data-sweep]')?.setAttribute('transform',`rotate(${phase} 300 210)`);
@@ -21,30 +37,43 @@ export function mountAdvancedView(root:HTMLElement,request:(a:ChallengeAction)=>
     if(state.kind==='sequence'){const strip=surface.querySelector<HTMLElement>('[data-stream]');if(strip)strip.style.transform=`translateX(${-streamPosition*52}px)`;}
     root.classList.toggle('challenge-holding',held);
   }
+  function refreshReceivers(c:ChallengeState){
+    let aligned=0;
+    for(let n=0;n<c.total;n++){
+      const receiver=surface.querySelector<HTMLElement>(`[data-receiver="${n}"]`)!;
+      const values=c.values.slice(n*4,n*4+4);
+      for(const input of receiver.querySelectorAll<HTMLInputElement>('[data-dial]'))values[Number(input.dataset.dial)%4]=Number(input.value);
+      const matches=receiverAligned(c,n,values);if(matches)aligned++;
+      receiver.querySelector('.receiver-plot')!.innerHTML=receiverPlot(c.target.slice(n*4,n*4+4),values,c.rules!.precision);
+      receiver.classList.toggle('receiver-aligned',matches);
+      receiver.querySelector('.receiver-lamp')!.setAttribute('aria-label',matches?'Aligned':'Tuning');
+    }
+    progress.textContent=`${aligned}/${c.total} receivers`;
+  }
   function refresh(c:ChallengeState,previous?:ChallengeState){
     const focus=document.activeElement as HTMLElement|null,focusKey=focus?.dataset.knob!==undefined?`[data-knob="${focus.dataset.knob}"]`:focus?.dataset.dial!==undefined?`[data-dial="${focus.dataset.dial}"]`:'';
     if(c.kind==='hex'&&surface.querySelector('.hex-tile')){
       for(const g of surface.querySelectorAll<HTMLElement>('.hex-channels')){const i=Number(g.parentElement!.dataset.choice),old=rotations.get(i)??{mod:c.values[i],angle:c.values[i]*60},delta=(c.values[i]-old.mod+6)%6;old.angle+=(delta===5?-1:delta)*60;old.mod=c.values[i];rotations.set(i,old);g.style.transform=`rotate(${old.angle}deg)`;}
     }else if(c.kind==='waveform'&&surface.querySelectorAll('[data-receiver]').length===c.total){
-      for(const input of surface.querySelectorAll<HTMLInputElement>('[data-dial]')){const i=Number(input.dataset.dial);if(i!==editingIndex&&input!==knob?.input)input.value=String(c.values[i]);const dial=input.previousElementSibling as HTMLElement;dial.style.setProperty('--dial-angle',`${Number(input.value)*2.7-135}deg`);dial.setAttribute('aria-valuenow',input.value);}
-      for(let n=0;n<c.total;n++){const receiver=surface.querySelector<HTMLElement>(`[data-receiver="${n}"]`)!,values=c.values.slice(n*4,n*4+4);for(const input of receiver.querySelectorAll<HTMLInputElement>('[data-dial]'))values[Number(input.dataset.dial)%4]=Number(input.value);receiver.querySelector('.receiver-plot')!.innerHTML=receiverPlot(c.target.slice(n*4,n*4+4),values);receiver.classList.toggle('receiver-aligned',receiverAligned(c,n));}
+      for(const input of surface.querySelectorAll<HTMLInputElement>('[data-dial]')){const i=Number(input.dataset.dial);if(i!==editingIndex&&input!==knob?.input)input.value=String(pendingTuners.get(i)??c.values[i]);const dial=input.previousElementSibling as HTMLElement;dial.style.setProperty('--dial-angle',`${Number(input.value)*2.7-135}deg`);dial.setAttribute('aria-valuenow',input.value);}
     }else{surface.innerHTML=advancedArt(c);if(c.kind==='hex')c.values.forEach((mod,i)=>rotations.set(i,{mod,angle:mod*60}));}
     controls.innerHTML=c.kind==='waveform'?'<button data-check>Lock all signals</button>':c.kind==='glyph'?'<button data-check>Verify full code</button>':c.kind==='rotor'?'<button data-hit>Set pin</button>':c.kind==='sequence'?'<button data-transfer>Hold to transfer</button>':c.kind==='worm'?`<div class="worm-pad">${['↑','→','↓','←'].map((s,i)=>`<button data-direction="${i}" aria-label="Move ${['up','right','down','left'][i]}">${s}</button>`).join('')}</div>`:'';
     if(c.failed&&gm){const retry=document.createElement('button');retry.dataset.retry='';retry.textContent='Allow another attempt';controls.append(retry);}
     progress.textContent=c.kind==='waveform'?`${Array.from({length:c.total},(_,i)=>receiverAligned(c,i)).filter(Boolean).length}/${c.total} receivers`:c.kind==='rotor'?`${c.values.filter(Boolean).length}/${c.values.length} pins`:c.kind==='worm'?`${c.used.length}/${c.target.length} dots · ${c.livesLeft} lives`:c.kind==='orbit'||c.kind==='mirror'?`${c.used.length}/${c.pieces.length}`:c.kind==='sequence'?`${c.values.reduce((a,b)=>a+b,0)}/${c.target.filter((_,i)=>i%2===1).reduce((a,b)=>a+b,0)} symbols`:'';
     if(['rotor','mirror','orbit'].includes(c.kind)&&c.rules!.mistakeLimit>0)progress.textContent+=` · ${Math.max(0,c.rules!.mistakeLimit-c.mistakes)} misses left`;
-    root.querySelector('.challenge-help')!.textContent=c.kind==='waveform'?'Tune every receiver, then lock the whole rack. Dashed amber is the target; cyan is your signal.':c.kind==='hex'?'Connect every channel. Click turns clockwise; right click turns backward.':c.kind==='rotor'?`Click or Space when the sweep reaches a pin.${c.rules!.reverse?' Every press reverses the sweep.':''}`:c.kind==='glyph'?'Deduce the full code from the shuffled overlapping clue pairs. Rotate each ring, then verify the whole chain.':c.kind==='mirror'?'The gold cursor reflects across the line. Place it over each target and click.':c.kind==='orbit'?'Move the mouse inward/outward to select a track, or use W/S and ↑/↓. Tap click or Space for a dot; hold through the arc and release at its end.':c.kind==='sequence'?'Hold Space, the screen, or Transfer while a needed symbol crosses the gate. Release over other symbols and completed groups.':'Arrow keys / WASD steer. Collect every dot. Space boosts. Edges, walls, and your own body cause collisions.';
+    root.querySelector('.challenge-help')!.textContent=c.kind==='waveform'?'Keep the cyan signal inside the amber target band, then lock all signals. Drag slowly to tune; hold Shift for finer knob control. Arrow keys adjust one step.':c.kind==='hex'?'Connect every channel. Click turns clockwise; right click turns backward.':c.kind==='rotor'?`Click or Space when the sweep reaches a pin.${c.rules!.reverse?' Every press reverses the sweep.':''}`:c.kind==='glyph'?'Deduce the full code from the shuffled overlapping clue pairs. Rotate each ring, then verify the whole chain.':c.kind==='mirror'?'The gold cursor reflects across the line. Place it over each target and click.':c.kind==='orbit'?'Move the mouse inward/outward to select a track, or use W/S and ↑/↓. Tap click or Space for a dot; hold through the arc and release at its end.':c.kind==='sequence'?'Hold Space, the screen, or Transfer while a needed symbol crosses the gate. Release over other symbols and completed groups.':'Arrow keys / WASD steer. Collect every dot. Space boosts. Edges, walls, and your own body cause collisions.';
     feedback.textContent=c.failed?(c.feedback==='Time expired.'?'Time expired. ':'Attempt ended. ')+(c.rules!.retry==='reopen'?'Close and reopen to retry, or ask the GM.':'Wait for the GM to reset the attempt.'):c.feedback;
     if(focusKey)surface.querySelector<HTMLElement>(focusKey)?.focus({preventScroll:true});
     if(c.kind==='glyph'&&previous&&!matchMedia('(prefers-reduced-motion: reduce)').matches)surface.querySelectorAll('.reel-selected').forEach((el,i)=>{if(previous.values[i]!==c.values[i])el.animate([{transform:'translateY(-20px)',opacity:.3},{transform:'translateY(0)',opacity:1}],{duration:150,easing:'ease-out'});});
+    if(c.kind==='waveform')refreshReceivers(c);
     positions();
   }
   function update(p:PublicPuzzle,canPlay:boolean,isGM:boolean,pending:boolean,autoEnter=true){
     root.hidden=p.puzzleType!=='challenge'||p.challenge?.version!==2;if(root.hidden){stop();return;}
     let c:ChallengeState;try{c=validateChallenge(p.challenge);}catch{play=false;stop();feedback.textContent='Invalid console data. Ask the GM to restore a private backup.';return;}
     const previous=state,changed=key!==p.puzzleId||c.kind!==previous?.kind;
-    if(changed){key=p.puzzleId;revision=-1;rotations.clear();queue.length=0;entered='';phase=c.kind==='orbit'?c.target[0]??0:0;streamPosition=0;ring=0;stop();surface.replaceChildren();}
-    else if(previous?.attempt!==c.attempt){stop();queue.length=0;phase=c.kind==='orbit'?c.target[0]??0:0;streamPosition=0;ring=0;direction=1;}
+    if(changed){pendingTuners.clear();key=p.puzzleId;revision=-1;rotations.clear();queue.length=0;entered='';phase=c.kind==='orbit'?c.target[0]??0:0;streamPosition=0;ring=0;stop();surface.replaceChildren();}
+    else if(previous?.attempt!==c.attempt){pendingTuners.clear();stop();queue.length=0;phase=c.kind==='orbit'?c.target[0]??0:0;streamPosition=0;ring=0;direction=1;}
     if(previous&&c.livesLeft!==previous.livesLeft){moving=false;direction=1;}
     state=c;play=canPlay;gm=isGM;busy=pending;autoEnterAllowed=autoEnter;root.dataset.kind=c.kind;root.dataset.disabled=String(!canPlay);root.classList.toggle('challenge-failed',c.failed);root.classList.toggle('challenge-complete',c.opened);
     if(!play||c.failed||c.opened)stop();if(c.failed||c.opened)queue.length=0;
@@ -63,9 +92,9 @@ export function mountAdvancedView(root:HTMLElement,request:(a:ChallengeAction)=>
   root.addEventListener('click',e=>{const t=(e.target as Element).closest<HTMLElement>('[data-choice],[data-check],[data-retry],[data-direction]');if(!t)return;if(t.hasAttribute('data-retry')){if(gm&&!busy)send({op:'retry'});return;}if(!allowed())return;
     if(t.dataset.choice!==undefined)send({op:'choose',index:Number(t.dataset.choice),value:1});if(t.hasAttribute('data-check'))send({op:'check'});if(t.dataset.direction!==undefined)steer(Number(t.dataset.direction));});
   root.addEventListener('contextmenu',e=>{if(!state||!['hex','glyph'].includes(state.kind))return;const t=(e.target as Element).closest<HTMLElement>('[data-choice]');if(t){e.preventDefault();send({op:'choose',index:Number(t.dataset.choice),value:-1});}});
-  root.addEventListener('input',e=>{const input=e.target as HTMLInputElement;if(input.dataset.dial===undefined||!state)return;const index=Number(input.dataset.dial),receiver=Math.floor(index/4),values=state.values.slice(receiver*4,receiver*4+4);for(const other of surface.querySelectorAll<HTMLInputElement>(`[data-receiver="${receiver}"] input[data-dial]`))values[Number(other.dataset.dial)%4]=Number(other.value);
-    surface.querySelector(`[data-receiver="${receiver}"] .receiver-plot`)!.innerHTML=receiverPlot(state.target.slice(receiver*4,receiver*4+4),values);const dial=input.previousElementSibling as HTMLElement;dial.style.setProperty('--dial-angle',`${Number(input.value)*2.7-135}deg`);dial.setAttribute('aria-valuenow',input.value);});
-  root.addEventListener('change',e=>{const input=e.target as HTMLInputElement;if(input.dataset.dial!==undefined)send({op:'set',index:Number(input.dataset.dial),value:Number(input.value)});});
+  root.addEventListener('input',e=>{const input=e.target as HTMLInputElement;if(input.dataset.dial===undefined||!state)return;
+    refreshReceivers(state);const dial=input.previousElementSibling as HTMLElement;dial.style.setProperty('--dial-angle',`${Number(input.value)*2.7-135}deg`);dial.setAttribute('aria-valuenow',input.value);});
+  root.addEventListener('change',e=>{const input=e.target as HTMLInputElement;if(input.dataset.dial!==undefined&&allowed()){pendingTuners.set(Number(input.dataset.dial),Number(input.value));send({op:'set',index:Number(input.dataset.dial),value:Number(input.value)});}});
   root.addEventListener('pointerdown',e=>{
     const range=(e.target as Element).closest<HTMLInputElement>('input[data-dial]');if(range&&allowed())editingIndex=Number(range.dataset.dial);
     const dial=(e.target as Element).closest<HTMLElement>('[data-knob]');if(dial&&allowed()){e.preventDefault();dial.setPointerCapture(e.pointerId);const input=surface.querySelector<HTMLInputElement>(`[data-dial="${dial.dataset.knob}"]`)!;knob={input,value:Number(input.value),x:e.clientX,y:e.clientY};return;}
@@ -73,7 +102,7 @@ export function mountAdvancedView(root:HTMLElement,request:(a:ChallengeAction)=>
     if((e.target as Element).closest('[data-hit],[data-transfer]')||(surface.contains(e.target as Node)&&['orbit','sequence'].includes(state.kind))){e.preventDefault();(e.target as Element).setPointerCapture(e.pointerId);beginHold();}
     if(surface.contains(e.target as Node)&&state.kind==='mirror'){const point=pointerPoint(e);mirrorX=Math.max(0,Math.min(100,(point.x-120)/3.6));mirrorY=Math.max(0,Math.min(100,(point.y-30)/3.6));positions();send({op:'hit',index:Math.round(mirrorX),value:Math.round(mirrorY)});}
   });
-  root.addEventListener('pointermove',e=>{if(knob){knob.input.value=String(Math.max(Number(knob.input.min),Math.min(100,Math.round(knob.value+(e.clientX-knob.x+knob.y-e.clientY)/2))));knob.input.dispatchEvent(new Event('input',{bubbles:true}));return;}if(!state||!surface.contains(e.target as Node)||!surface.querySelector('svg'))return;const p=pointerPoint(e);
+  root.addEventListener('pointermove',e=>{if(knob){knob.input.value=String(Math.max(Number(knob.input.min),Math.min(100,Math.round(knob.value+(e.clientX-knob.x+knob.y-e.clientY)/(e.shiftKey?18:6)))));knob.input.dispatchEvent(new Event('input',{bubbles:true}));return;}if(!state||!surface.contains(e.target as Node)||!surface.querySelector('svg'))return;const p=pointerPoint(e);
     if(state.kind==='mirror'){mirrorX=Math.max(0,Math.min(100,(p.x-120)/3.6));mirrorY=Math.max(0,Math.min(100,(p.y-30)/3.6));}
     if(state.kind==='orbit'&&!held){const distance=Math.hypot(p.x-300,p.y-210);ring=Array.from({length:state.rules!.count},(_,i)=>i).reduce((a,b)=>Math.abs(distance-orbitRadius(state!,b))<Math.abs(distance-orbitRadius(state!,a))?b:a,0);}
     positions();

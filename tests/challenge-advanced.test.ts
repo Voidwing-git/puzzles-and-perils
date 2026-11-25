@@ -21,6 +21,21 @@ test('receiver stack requires every signal to match in one lock and adds phase/h
   for(let i=0;i<16;i++)p=act(p,{op:'set',index:i,value:p.state.challenge!.target[i]});p=act(p,{op:'check'});assert.equal(p.state.challenge!.opened,false);assert.equal(p.state.challenge!.stage,0);
   for(let i=16;i<20;i++)p=act(p,{op:'set',index:i,value:p.state.challenge!.target[i]});assert.ok(Array.from({length:5},(_,i)=>receiverAligned(p.state.challenge!,i)).every(Boolean));p=act(p,{op:'check'});assert.equal(p.state.challenge!.opened,true);assert.equal(p.state.challenge!.stage,5);
 });
+test('receiver acceptance follows plotted error instead of hidden parameter differences',()=>{
+  const p=createAdvancedChallenge('waveform','scope',1,settings('waveform',{phase:true,harmonics:true,precision:2})),c=p.state.challenge!;
+  c.target=[25,50,0,0];c.values=[27,50,0,0];
+  assert.equal(receiverAligned(c,0),false,'nearby wavelengths can draw very different signals');
+  assert.equal(act(p,{op:'check'}).state.challenge!.opened,false);
+  c.target=[50,25,0,0];c.values=[50,25,0,10];
+  assert.equal(receiverAligned(c,0),true,'visually close harmonics should pass despite different knob values');
+  assert.equal(act(p,{op:'check'}).state.challenge!.opened,true);
+  for(const precision of [1,2,3,4,5]){
+    c.rules!.precision=precision;c.target=[50,50,0,0];
+    c.values=[50,50+precision*2,100,0];assert.equal(receiverAligned(c,0),true);
+    c.values=[50,51+precision*2,0,0];assert.equal(receiverAligned(c,0),false);
+  }
+});
+
 test('hex generator varies connected masks and slot counts, with no forced all-way center',()=>{
   const patterns=new Set<string>();let variedCenter=false;
   for(const count of [3,4,7,12,19])for(let i=0;i<16;i++){

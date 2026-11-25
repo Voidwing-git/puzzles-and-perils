@@ -84,7 +84,7 @@ test('snake has visible walls, plain dots, and configured lives that drop on bou
 test('receiver dragging survives an acknowledgement for another receiver',async({page})=>{
   await creator(page,'waveform');await page.locator('#challenge-count').selectOption('2');await publish(page);const knob=page.locator('#challenge-game [data-knob="0"]'),handle=await knob.elementHandle(),box=(await knob.boundingBox())!;
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+20,box.y+box.height/2-20,{steps:5});await tune(page,4,57);
-  expect(await handle!.evaluate(el=>el.isConnected)).toBe(true);await page.mouse.up();await expect.poll(async()=>(await saved(page)).state.challenge!.values[0]).toBe(70);expect((await saved(page)).state.challenge!.values[4]).toBe(57);
+  expect(await handle!.evaluate(el=>el.isConnected)).toBe(true);await page.mouse.up();await expect.poll(async()=>(await saved(page)).state.challenge!.values[0]).toBe(57);expect((await saved(page)).state.challenge!.values[4]).toBe(57);
 });
 test('GM resetting a moving snake starts a fresh attempt waiting for input',async({page})=>{
   await creator(page,'worm');await rule(page,'walls',0);await rule(page,'speed',1);await publish(page);await focusSurface(page);await page.keyboard.press('ArrowRight');await expect.poll(async()=>(await saved(page)).state.challenge!.values[0]).toBe(27);
@@ -93,4 +93,24 @@ test('GM resetting a moving snake starts a fresh attempt waiting for input',asyn
 test('GM Solve waits for the final held-stream acknowledgement',async({page})=>{
   await creator(page,'sequence');await publish(page);await expect(page.locator('#complete-puzzle')).toBeEnabled();await page.evaluate(()=>{const original=window.setTimeout.bind(window);window.setTimeout=((handler:TimerHandler,delay?:number,...args:unknown[])=>original(handler,delay===90?600:delay,...args)) as typeof setTimeout;});
   await focusSurface(page);await page.keyboard.down('Space');await expect(page.locator('#complete-puzzle')).toBeDisabled();await page.keyboard.up('Space');await page.locator('#complete-puzzle').click();await expect(page.locator('#success')).toBeVisible();
+});
+
+
+test('receiver scope, live alignment and final lock share the same signal tolerance',async({page})=>{
+  await creator(page,'waveform');await publish(page);
+  const target=(await saved(page)).state.challenge!.target;
+  for(let i=0;i<target.length;i++){if(i%4===3)continue;await tune(page,i,target[i]);}
+  await tune(page,0,target[0]+2);
+  await expect(page.locator('#challenge-game .receiver-aligned')).toHaveCount(0);
+  await action(page,'[data-check]');await expect(page.locator('#success')).toBeHidden();
+  const input=page.locator('#challenge-game [data-dial="0"]');
+  await input.evaluate((el:HTMLInputElement,value)=>{el.value=String(value);el.dispatchEvent(new Event('input',{bubbles:true}));},target[0]);
+  await expect(page.locator('#challenge-game .receiver-aligned')).toHaveCount(1);
+  await expect(page.locator('#challenge-game .receiver-lamp')).toHaveAttribute('aria-label','Aligned');
+  await expect(page.locator('#challenge-game .challenge-progress')).toHaveText('1/1 receivers');
+  expect((await saved(page)).state.challenge!.values[0]).toBe(target[0]+2);
+  await input.dispatchEvent('change');
+  await expect.poll(async()=>(await saved(page)).state.challenge!.values[0]).toBe(target[0]);
+  await page.screenshot({path:'docs/evidence/wave-harmonics-alignment.png',fullPage:true});
+  await action(page,'[data-check]');await expect(page.locator('#success')).toBeVisible();
 });

@@ -144,6 +144,10 @@ before reaching the controller is rejected if its puzzle state has changed.
 Automatic recovery warns once per unresolved puzzle in a GM session. Successful
 recovery clears that warning state; the private-save match remains required.
 
+Wave Harmonics compares the drawn signals against the visible amber tolerance
+band. The alignment lamp and receiver count update while tuning; knob dragging
+is slower, with Shift for fine adjustment and arrow keys for single steps.
+
 ## GitHub Pages
 
 Use the reviewed repository ZIP as the starting repository contents. Do not

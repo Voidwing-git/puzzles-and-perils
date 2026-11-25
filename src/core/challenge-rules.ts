@@ -27,7 +27,13 @@ export function circuitsMatch(c:ChallengeState){
   const seen=new Set<number>(),queue=[0];while(queue.length){const i=queue.pop()!;if(seen.has(i))continue;seen.add(i);const mask=rotateMask(c.pieces[i][2],c.values[i]);for(let d=0;d<6;d++)if(mask&(1<<d)){const j=hexNeighbor(c,i,d);if(j>=0)queue.push(j);}}return seen.size===c.pieces.length;
 }
 export function reflectAxis(angle:number,x:number,y:number):[number,number]{const theta=angle*Math.PI/90,dx=x-50,dy=y-50;return[50+Math.cos(theta)*dx+Math.sin(theta)*dy,50+Math.sin(theta)*dx-Math.cos(theta)*dy];}
-export const receiverAligned=(c:ChallengeState,n:number)=>c.values.slice(n*4,n*4+4).every((v,i)=>{const diff=i===2?Math.min(Math.abs(v-c.target[n*4+i]),100-Math.abs(v-c.target[n*4+i])):Math.abs(v-c.target[n*4+i]);return diff<=c.rules!.precision;});
+// These exact samples also draw the scope; acceptance measures visible error.
+export const receiverTolerance=(precision:number)=>precision*1.6;
+export function receiverSamples(values:number[]){return Array.from({length:301},(_,i)=>{const phase=i*2/(values[0]*3)*Math.PI*2+values[2]/100*Math.PI*2;return 110-(Math.sin(phase)+values[3]/100*Math.sin(phase*2))*values[1]*.8;});}
+export function receiverAligned(c:ChallengeState,n:number,values=c.values.slice(n*4,n*4+4)){
+  const target=receiverSamples(c.target.slice(n*4,n*4+4)),signal=receiverSamples(values),tolerance=receiverTolerance(c.rules!.precision);
+  return signal.every((y,i)=>Math.abs(y-target[i])<=tolerance+1e-9);
+}
 export function makeAdvanced(kind:ChallengeKind,rules:ChallengeRules,total:number){
   let values:number[]=[],target:number[]=[],pieces:number[][]=[],answer:number[]=[];
   if(kind==='waveform'){
