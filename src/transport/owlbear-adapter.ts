@@ -82,8 +82,7 @@ export class OwlbearAdapter {
         throw new Error('Saved board does not match these edits. Keep this window open and retry after reconnecting.');
       return result.snapshot;
     }
-    const request: Request = { id: crypto.randomUUID(), generation: 'start', expiresAt: Date.now() + 6000,
-      tokenId: this.#tokenId, command: { type: restoring?'restore-draft':'publish-draft', draftId: preparation.state.puzzleId, puzzleId: 'start', expectedRevision: 0 } };
+    const request: Request = { id: crypto.randomUUID(), generation: 'start', tokenId: this.#tokenId, command: { type: restoring?'restore-draft':'publish-draft', draftId: preparation.state.puzzleId, puzzleId: 'start', expectedRevision: 0 } };
     await OBR.broadcast.sendMessage(CHANNEL, request, { destination: 'ALL' });
     for (let i = 0; i < 25; i++) {
       await new Promise(resolve => setTimeout(resolve, 200));
@@ -199,7 +198,7 @@ export class OwlbearAdapter {
   }
   async start(fixture: FixtureId = 'relay') {
     if (!this.#gm || this.#shared) throw new Error('Only a GM can start an empty room.');
-    const request = { id: crypto.randomUUID(), generation: 'start', expiresAt: Date.now() + 6000, tokenId: this.#tokenId, fixture, command: {
+    const request = { id: crypto.randomUUID(), generation: 'start', tokenId: this.#tokenId, fixture, command: {
       type: 'advance-turn', expectedRevision: 0, puzzleId: 'start',
     } };
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -227,14 +226,14 @@ export class OwlbearAdapter {
       this.#available=this.#readOkay&&this.#shared?.version===1&&gms.length===1&&gms[0]===this.#shared.owner;
       if(!gmSave&&gms.length>1)throw new Error('More than one GM connection is open. Close the extra GM room tabs before playing. GM puzzle updates can still be saved.');
       if(!this.#shared||(!this.#available&&!gmSave))throw new Error('The GM controller is reconnecting or its private save is unavailable. Reload the GM room; if this persists, check Save / recovery.');
-      const request:Request={id:crypto.randomUUID(),generation:this.#shared.generation,expiresAt:Date.now()+6000,tokenId:this.#tokenId,command};
+      const request:Request={id:crypto.randomUUID(),generation:this.#shared.generation,tokenId:this.#tokenId,command};
       this.#requestId=request.id;this.#failure=undefined;
       // Retry the same ID, never a fresh rotation. Durable metadata is the ack.
       for (let attempt = 0; attempt < 3; attempt++) {
         sent=true;
         await OBR.broadcast.sendMessage(CHANNEL, request, { destination: 'ALL' });
-        const deadline=Date.now()+2000;
-        while(Date.now()<deadline){
+        const deadline=performance.now()+2000;
+        while(performance.now()<deadline){
           const version=this.#changes.version;
           await this.#read();
           const receipt = this.#shared?.receipts.find(r => r.id === request.id && r.connection === this.#connection);
@@ -244,11 +243,11 @@ export class OwlbearAdapter {
               // Public metadata can acknowledge before the background commits
               // its private save. Keep this action pending through that gap so
               // the UI can buffer the next gesture instead of dropping it.
-              const commitDeadline=Date.now()+2000;
+              const commitDeadline=performance.now()+2000;
               while(!this.privatePreparation(false)){
                 const commitVersion=this.#changes.version;
-                if(Date.now()>=commitDeadline)throw new Error('Private save acknowledgment unavailable. Reopen the puzzle to reconcile.');
-                await this.#changes.wait(commitVersion,Math.min(100,commitDeadline-Date.now()));
+                if(performance.now()>=commitDeadline)throw new Error('Private save acknowledgment unavailable. Reopen the puzzle to reconcile.');
+                await this.#changes.wait(commitVersion,Math.min(100,commitDeadline-performance.now()));
                 await this.#refresh?.();
               }
             }
@@ -263,7 +262,7 @@ export class OwlbearAdapter {
             if(!failure.uncertain)sent=false;
             throw new Error(this.status);
           }
-          await this.#changes.wait(version,Math.max(0,Math.min(200,deadline-Date.now())));
+          await this.#changes.wait(version,Math.max(0,Math.min(200,deadline-performance.now())));
         }
       }
       this.#available = false;

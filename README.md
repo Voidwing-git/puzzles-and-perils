@@ -137,6 +137,13 @@ normalized ZIP metadata and file-by-file archive verification. Review
 `artifacts/release-review.json` and the staged `.release` trees before publishing.
 Never upload an entire development workspace.
 
+Puzzle requests do not require synchronized device clocks. The GM controller
+uses a local monotonic deadline for queued work; puzzle identity, generation,
+revision and receipts protect against stale or repeated moves. A request delayed
+before reaching the controller is rejected if its puzzle state has changed.
+Automatic recovery warns once per unresolved puzzle in a GM session. Successful
+recovery clears that warning state; the private-save match remains required.
+
 ## GitHub Pages
 
 Use the reviewed repository ZIP as the starting repository contents. Do not

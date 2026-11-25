@@ -7,7 +7,7 @@ export const CHANNEL = 'com.arcane-pipes/requests-v1';
 export const STATUS_CHANNEL = 'com.arcane-pipes/request-status-v1';
 export interface RequestFailure { id:string; tokenId?:string; message:string; uncertain:boolean }
 export const TOKEN_KEY = 'com.arcane-pipes/token-v1';
-export interface Request { id: string; generation: string; expiresAt: number; command: Command; tokenId?: string; fixture?: FixtureId }
+export interface Request { id: string; generation: string; expiresAt?: number; command: Command; tokenId?: string; fixture?: FixtureId }
 export interface Receipt { id: string; connection: string; revision: number; accepted: boolean; reason?: string }
 export interface Shared {
   version: 1;
@@ -22,7 +22,8 @@ export function parseRequest(value: unknown): Request | null {
   if (!value || typeof value !== 'object') return null;
   const r = value as Request;
   if (typeof r.id !== 'string' || r.id.length > 80 || !r.id || typeof r.generation !== 'string') return null;
-  if (!Number.isSafeInteger(r.expiresAt) || r.expiresAt <= 0) return null;
+  // Accept legacy timestamps without using device clocks as authority.
+  if (r.expiresAt !== undefined && (!Number.isSafeInteger(r.expiresAt) || r.expiresAt <= 0)) return null;
   if (r.tokenId !== undefined && (typeof r.tokenId !== 'string' || !r.tokenId || r.tokenId.length > 100)) return null;
   if (r.fixture !== undefined && !['relay', 'last-connection', 'dual-power'].includes(r.fixture)) return null;
   const c = r.command;

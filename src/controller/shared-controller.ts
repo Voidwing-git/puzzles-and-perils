@@ -54,15 +54,17 @@ export class SharedController {
     this.#uncertain=false;return 'reconnected';
   }
   submit(data: unknown, sender: string): Promise<void> {
-    const job = this.#queue.then(() => this.#handle(data, sender));
+    // Use this controller's monotonic clock, independent of device date/time.
+    const deadline = performance.now() + 6000;
+    const job = this.#queue.then(() => this.#handle(data, sender, deadline));
     this.#queue = job.catch(() => {});
     return job;
   }
-  async #handle(data: unknown, sender: string) {
+  async #handle(data: unknown, sender: string, deadline: number) {
       const request = parseRequest(data);
       if (!request) return;
       if (request.tokenId !== this.tokenId) return;
-      if (request.expiresAt <= Date.now() || request.expiresAt > Date.now() + 10000) return;
+      if (performance.now() >= deadline) return;
       const peers = await this.io.peers();
       const gms = peers.filter(p => p.role === 'GM');
       const actor = peers.find(p => p.connectionId === sender);
@@ -162,9 +164,9 @@ export class SharedController {
       const currentActor = currentPeers.find(p => p.connectionId === sender);
       if ((publishing ? publisher(currentGms)?.connectionId !== this.connection : currentGms.length !== 1 || currentGms[0].connectionId !== this.connection) ||
         !currentActor || currentActor.id !== actor.id || currentActor.role !== actor.role) return;
-      // A request may expire while waiting on party/metadata IO. Never commit
-      // a queued request after its deadline, even when the revision still matches.
-      if (request.expiresAt <= Date.now()) return;
+      // Generation, revision and receipts reject stale/replayed moves.
+      // Bound queue and IO time without comparing different device clocks.
+      if (performance.now() >= deadline) return;
       // Stage a new version before publishing; retain the previous committed save
       // until metadata succeeds. An uncertain write pauses this controller.
       if (pendingPrivate && typeof localStorage !== 'undefined') savePrivate(`${privateKey}:staged`, pendingPrivate);

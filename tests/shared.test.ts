@@ -91,22 +91,31 @@ test('wire validation rejects unsupported modes, tile indices, revisions and com
     assert.equal(parseRequest({ ...base, command: { ...base.command, ...change } }), null);
 });
 
-test('expired and excessively future requests cannot mutate a still-current revision', async () => {
-  const t = await setup();
-  await t.controller.submit({ ...t.request('late'), expiresAt: Date.now() - 1 }, 'a1');
-  await t.controller.submit({ ...t.request('future'), expiresAt: Date.now() + 60000 }, 'a1');
-  assert.equal(t.shared().puzzle.revision, 0);
-  assert.equal(t.writes(), 1);
+test('device clock offsets allow valid moves while revisions and receipts reject replay', async () => {
+  for (const expiresAt of [1, Date.now() + 86400000, undefined]) {
+    const t = await setup();
+    const request = { ...t.request('offset'), expiresAt };
+    await t.controller.submit(request, 'a1');
+    assert.equal(t.shared().puzzle.revision, 1);
+    const count = t.writes();
+    await t.controller.submit(request, 'a1');
+    assert.equal(t.writes(), count);
+    await t.controller.submit({ ...request, id: 'stale' }, 'a1');
+    assert.equal(t.shared().receipts.at(-1)?.reason, 'stale-revision');
+    assert.equal(t.shared().puzzle.revision, 1);
+  }
 });
 
-test('request expiring during metadata IO cannot commit', async () => {
+test('controller-local deadline bounds queue and metadata IO', async context => {
   const t = await setup();
+  let now = 0;
+  context.mock.method(performance, 'now', () => now);
   const controller = new SharedController('g', {
     peers: async () => t.peers(),
-    read: async () => { await new Promise(resolve => setTimeout(resolve, 40)); return t.metadata(); },
+    read: async () => { now = 6001; return t.metadata(); },
     write: async () => { assert.fail('Expired command must not write'); },
   });
-  await controller.submit({ ...t.request('queued'), expiresAt: Date.now() + 20 }, 'a1');
+  await Promise.all([controller.submit(t.request('io'), 'a1'), controller.submit(t.request('queued'), 'a1')]);
   assert.equal(t.shared().puzzle.revision, 0);
 });
 

@@ -32,20 +32,24 @@ OBR.onReady(async () => {
       return tokenControllers.get(tokenId)!;
     };
     let reconnecting:Promise<void>|undefined,dirty=false;
+    const warnedRecovery = new Set<string>();
     const reconnectAll=()=>{
       if(reconnecting){dirty=true;return;}
       reconnecting=(async()=>{
         const party=await peers();if(party.filter(p=>p.role==='GM').length!==1||!party.some(p=>p.role==='GM'&&p.connectionId===connection))return;
-        let restored=0,skipped=0;
-        const attempt=async(target:SharedController)=>{
-          try{const result=await target.reconnect();if(result==='reconnected')restored++;else if(result==='skipped')skipped++;}catch{skipped++;}
+        let newlySkipped=0;
+        const attempt=async(id:string,target:SharedController)=>{
+          let skipped=true;
+          try{skipped=await target.reconnect()==='skipped';}catch{}
+          if(!skipped){warnedRecovery.delete(id);return;}
+          if(!warnedRecovery.has(id)){warnedRecovery.add(id);newlySkipped++;}
         };
-        const room=await OBR.room.getMetadata();if(room[KEY])await attempt(controller);
+        const room=await OBR.room.getMetadata();if(room[KEY])await attempt('room',controller);
         if(await OBR.scene.isReady()){
           const tokens=(await OBR.scene.items.getItems()).filter(item=>item.metadata[TOKEN_KEY]===true&&item.metadata[KEY]);
-          for(const token of tokens)await attempt(forToken(token.id));
+          for(const token of tokens)await attempt(token.id,forToken(token.id));
         }
-        if(skipped)await OBR.notification.show(`Reconnected ${restored} puzzles. ${skipped} need a matching private save in Save / recovery.`,'WARNING');
+        if(newlySkipped)await OBR.notification.show(`Automatic reconnection needs a matching private save for ${newlySkipped} puzzle${newlySkipped===1?'':'s'}. Open Save / recovery in the original GM browser.`,'WARNING');
       })().catch(async()=>{await OBR.notification.show('Puzzle reconnection could not finish. Reload the GM room to retry.','ERROR');}).finally(()=>{reconnecting=undefined;if(dirty){dirty=false;reconnectAll();}});
     };
     OBR.scene.onReadyChange(()=>reconnectAll());
@@ -53,10 +57,6 @@ OBR.onReady(async () => {
     OBR.broadcast.onMessage(CHANNEL, event => {
       const request = parseRequest(event.data);
       if (!request) return;
-      if(request.expiresAt<=Date.now()||request.expiresAt>Date.now()+10000){
-        void OBR.broadcast.sendMessage(STATUS_CHANNEL,{id:request.id,tokenId:request.tokenId,message:'Request timing differs from the GM controller. Enable automatic date/time on both devices, then reopen the puzzle.',uncertain:false},{destination:'ALL'});
-        return;
-      }
       let target = controller;
       if (request.tokenId) {
         const tokenId = request.tokenId;

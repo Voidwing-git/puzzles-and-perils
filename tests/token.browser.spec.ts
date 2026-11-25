@@ -50,6 +50,14 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
       { id: 'token-a', type: 'IMAGE', name: 'Puzzle A', metadata: { unrelated: 'keep-a' } },
       { id: 'token-b', type: 'IMAGE', name: 'Puzzle B', metadata: { unrelated: 'keep-b' } },
     ];
+    let savedRecoveryMetadata:Record<string,unknown>|undefined;
+    document.addEventListener('test-recovery-state',(event)=>{
+      if((event as CustomEvent).detail==='break'){
+        savedRecoveryMetadata=structuredClone(tokens[0].metadata);
+        (tokens[0].metadata[KEY] as {owner:string}).owner='missing-controller';
+        (tokens[0].metadata[KEY] as {puzzle:PublicPuzzle}).puzzle.revision++;
+      }else if(savedRecoveryMetadata)tokens[0].metadata=structuredClone(savedRecoveryMetadata);
+    });
     const heldWriteAcks:(()=>void)[]=[];
     document.addEventListener('release-write-acks',()=>{
       document.body.dataset.holdWriteAck='false';heldWriteAcks.splice(0).forEach(release=>release());
@@ -170,6 +178,7 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
         log.textContent += JSON.stringify(data.data) + '\n';
         frames.filter(f=>f.channel===data.channel && f.frame.isConnected).forEach(f=>send(f.frame,`OBR_BROADCAST_MESSAGE_${data.channel}`,{data:data.data,connectionId:source.peer.connectionId}));
       }
+      else if(id==='OBR_NOTIFICATION_SHOW'&&String(data.message).includes('matching private save'))document.body.dataset.recoveryWarnings=String(Number(document.body.dataset.recoveryWarnings??0)+1);
       else if (id === 'OBR_ROOM_GET_METADATA') response = {metadata:{}};
       if (nonce) send(source.frame, `${id}_RESPONSE${nonce}`, response);
     });
@@ -589,10 +598,11 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
     if(token==='A'){
       const before=await revision();
       await page.locator('body').evaluate(body=>{body.dataset.expireNextRequest='true';});
+      await player.locator('body').evaluate(()=>{const now=Date.now;Date.now=()=>now()+86400000;});
       await player.locator('[data-index="6"]').dblclick();
-      await expect(player.locator('.demo-banner')).toContainText('Request timing differs');
-      expect(await revision()).toBe(before);
-      await player.locator('[data-index="6"]').dblclick();await expect.poll(revision).toBe(before+1);
+      await expect.poll(revision).toBe(before+1);
+      await player.locator('body').evaluate(()=>{Date.now=()=>1;});
+      await player.locator('[data-index="6"]').dblclick();await expect.poll(revision).toBe(before+2);
     }
     for(const outcome of ['after','before']){
       await expect(player.locator('[data-index="6"]')).toBeEnabled();
@@ -625,5 +635,21 @@ test('token context entry, solo GM, private player rehearsal and isolated reset/
   await expect.poll(async()=>JSON.parse(await page.locator('#state').innerText()).every((t:any)=>t.metadata['com.arcane-pipes/shared-v1'].owner==='g-reconnected-2')).toBe(true);
   const afterSceneReconnect=JSON.parse(await page.locator('#state').innerText());
   for(let i=0;i<beforeSceneReconnect.length;i++)expect(afterSceneReconnect[i].metadata['com.arcane-pipes/shared-v1'].puzzle).toEqual(beforeSceneReconnect[i].metadata['com.arcane-pipes/shared-v1'].puzzle);
+  const recoveryWarnings=async()=>Number(await page.locator('body').getAttribute('data-recovery-warnings')??0);
+  const warningCount=await recoveryWarnings();
+  await page.evaluate(()=>document.dispatchEvent(new CustomEvent('test-recovery-state',{detail:'break'})));
+  await hostAction('Toggle test scene');await hostAction('Toggle test scene');
+  await expect.poll(recoveryWarnings).toBe(warningCount+1);
+  const reads=Number(await page.locator('body').getAttribute('data-all-item-reads'));
+  await hostAction('Toggle test scene');await hostAction('Toggle test scene');
+  await expect.poll(async()=>Number(await page.locator('body').getAttribute('data-all-item-reads'))).toBeGreaterThan(reads);
+  await page.waitForTimeout(300);
+  expect(await recoveryWarnings()).toBe(warningCount+1);
+  await page.evaluate(()=>document.dispatchEvent(new CustomEvent('test-recovery-state',{detail:'restore'})));
+  await hostAction('Toggle test scene');await hostAction('Toggle test scene');
+  await page.waitForTimeout(300);
+  await page.evaluate(()=>document.dispatchEvent(new CustomEvent('test-recovery-state',{detail:'break'})));
+  await hostAction('Toggle test scene');await hostAction('Toggle test scene');
+  await expect.poll(recoveryWarnings).toBe(warningCount+2);
   expect(errors).toEqual([]);
 });
